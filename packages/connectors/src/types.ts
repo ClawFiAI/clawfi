@@ -204,4 +204,79 @@ export interface IDexConnector extends IConnector {
   }>;
 }
 
+// ============================================
+// Launchpad Types
+// ============================================
+
+/**
+ * Supported chains for launchpads
+ */
+export type LaunchpadChain = 'base' | 'ethereum' | 'solana' | 'bsc' | 'arbitrum';
+
+/**
+ * Launchpad token model
+ */
+export interface LaunchpadToken {
+  address: string;
+  symbol: string;
+  name: string;
+  chain: LaunchpadChain;
+  launchpad: string;
+  creator?: string;
+  createdAt: Date;
+  marketCapUsd?: number;
+  priceUsd?: number;
+  imageUrl?: string;
+  description?: string;
+  verified?: boolean;
+  warnings?: string[];
+  extensions?: Record<string, unknown>;
+  urls?: {
+    launchpad?: string;
+    explorer?: string;
+    dex?: string;
+    raydium?: string;
+    [key: string]: string | undefined;
+  };
+}
+
+/**
+ * Launchpad connector interface
+ */
+export interface LaunchpadConnector {
+  readonly id: string;
+  readonly name: string;
+  readonly chain: LaunchpadChain;
+  readonly type: 'launchpad';
+
+  /**
+   * Check if connector is enabled
+   */
+  isEnabled(): boolean;
+
+  /**
+   * Get connector status
+   */
+  getStatus(): Promise<{
+    connected: boolean;
+    latencyMs?: number;
+    error?: string;
+  }>;
+
+  /**
+   * Fetch recent token launches
+   */
+  fetchRecentLaunches(limit?: number): Promise<LaunchpadToken[]>;
+
+  /**
+   * Fetch new launches since last check
+   */
+  fetchNewLaunches?(): Promise<LaunchpadToken[]>;
+
+  /**
+   * Fetch token by address
+   */
+  fetchToken?(address: string): Promise<LaunchpadToken | null>;
+}
+
 
