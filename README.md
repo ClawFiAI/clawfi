@@ -16,13 +16,14 @@ ClawFi is a production-grade crypto agent that runs 24/7 on local hardware, moni
 
 ### Core Features
 - 🔌 **Plugin Connectors**: Binance CEX, EVM DEX (Uniswap V2/V3), with extensible architecture
-- 🚀 **Launchpad Indexing**: Clanker on Base with real-time detection + coverage verification
+- 🚀 **Multi-Chain Launchpads**: Clanker (Base), Pump.fun (Solana), Four.meme (BSC)
 - 🧠 **Strategy Engine**: Configurable detection strategies (MoltWatch for wallet rotations)
 - 🛡️ **Risk Engine**: Global constraints, kill switch, audit logging
-- 📊 **Web Dashboard**: Real-time monitoring, launchpad tracking, signal timeline, coverage widgets
-- 🔌 **Chrome Extension**: Clanker overlay with risk badges, token detection, signal display
-- 📱 **Telegram Notifications**: Real-time alerts for launches, molts, and risk signals
-- 🎯 **Intelligence Signals**: Early distribution analysis, liquidity risk detection
+- 📊 **Web Dashboard**: Real-time monitoring, launchpad tracking, signal timeline, metrics
+- 🔌 **Chrome Extension**: Multi-chain overlays with risk badges, token detection, signal display
+- 💻 **CLI Tool**: Full terminal control with real-time signal streaming
+- 📱 **Notifications**: Telegram and Discord webhooks with rich embeds
+- 🎯 **Intelligence Signals**: Early distribution analysis, liquidity risk detection, price alerts
 - 📈 **Prometheus Metrics**: Full observability endpoint at `/metrics`
 - 🔐 **Security First**: Encrypted secrets, no withdrawal support, full audit trail
 
@@ -339,12 +340,22 @@ pnpm lint
 - ✅ Watched tokens/wallets DB tables
 
 ### v0.2.1 (Current) - Multi-Chain Launchpads
-- ✅ CLI tool (`@clawfi/cli`) for terminal control
-- ✅ Discord webhook notifications
+- ✅ CLI tool (`@clawfi/cli`) with login, status, signals, watch, stream
+- ✅ Discord webhook notifications with rich embeds
 - ✅ Pump.fun connector (Solana launchpad)
 - ✅ Four.meme connector (BSC launchpad)
 - ✅ WebSocket reconnection with heartbeat
 - ✅ GitHub Actions CI/CD workflows
+- ✅ Price alert system for watched tokens
+- ✅ API rate limiting middleware
+- ✅ Comprehensive health check endpoints
+- ✅ Metrics dashboard in web UI
+- ✅ Chrome extension popup with stats
+- ✅ Solana content script for Solscan/Pump.fun
+- ✅ BSC content script for Four.meme
+- ✅ Multi-chain SDK utilities
+- ✅ Watchlist API routes
+- ✅ Launchpad tokens API routes
 
 ### v0.3 (Planned)
 - [ ] DEX transaction building (assist mode)
@@ -352,7 +363,6 @@ pnpm lint
 - [ ] More CEX connectors (Kraken, Coinbase)
 - [ ] Strategy backtesting
 - [ ] Price impact analysis
-- [ ] Price alerts for watched tokens
 
 ### v0.4 (Future)
 - [ ] Multi-user support
