@@ -598,3 +598,6 @@ export function createClawFiClient(config: ClawFiSDKConfig): ClawFiClient {
   return new ClawFiClient(config);
 }
 
+// Re-export chain utilities
+export * from './chains.js';
+
