@@ -353,13 +353,46 @@ export class ClawFiClient {
   // WebSocket methods
   // ============================================
 
+  private wsReconnectAttempts = 0;
+  private wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private wsHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private wsConnecting = false;
+  private wsManualClose = false;
+
+  /**
+   * WebSocket configuration
+   */
+  private wsConfig = {
+    reconnect: true,
+    maxReconnectAttempts: 10,
+    reconnectInterval: 1000,
+    maxReconnectInterval: 30000,
+    heartbeatInterval: 30000,
+  };
+
+  /**
+   * Configure WebSocket behavior
+   */
+  configureWebSocket(options: {
+    reconnect?: boolean;
+    maxReconnectAttempts?: number;
+    reconnectInterval?: number;
+    maxReconnectInterval?: number;
+    heartbeatInterval?: number;
+  }): void {
+    Object.assign(this.wsConfig, options);
+  }
+
   /**
    * Connect to WebSocket for real-time updates
    */
   connectWebSocket(): void {
-    if (this.ws) {
+    if (this.ws || this.wsConnecting) {
       return;
     }
+
+    this.wsManualClose = false;
+    this.wsConnecting = true;
 
     const wsUrl = this.config.wsUrl ?? this.config.baseUrl.replace(/^http/, 'ws');
     const url = new URL('/ws', wsUrl);
@@ -368,11 +401,33 @@ export class ClawFiClient {
       url.searchParams.set('token', this.config.authToken);
     }
 
-    this.ws = new WebSocket(url.toString());
+    try {
+      this.ws = new WebSocket(url.toString());
+    } catch (err) {
+      this.wsConnecting = false;
+      this.scheduleReconnect();
+      return;
+    }
+
+    this.ws.onopen = () => {
+      this.wsConnecting = false;
+      this.wsReconnectAttempts = 0;
+      this.startHeartbeat();
+      
+      // Notify connection listeners
+      const listeners = this.wsListeners.get('connected');
+      listeners?.forEach((callback) => callback(null));
+    };
 
     this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data as string) as { type: string; data: unknown };
+        
+        // Handle pong response (heartbeat acknowledgment)
+        if (message.type === 'pong') {
+          return;
+        }
+
         const listeners = this.wsListeners.get(message.type);
         listeners?.forEach((callback) => callback(message.data));
         
@@ -384,19 +439,106 @@ export class ClawFiClient {
       }
     };
 
-    this.ws.onclose = () => {
-      this.ws = null;
+    this.ws.onerror = () => {
+      // Error will be followed by close event
     };
+
+    this.ws.onclose = (event) => {
+      this.wsConnecting = false;
+      this.ws = null;
+      this.stopHeartbeat();
+      
+      // Notify disconnection listeners
+      const listeners = this.wsListeners.get('disconnected');
+      listeners?.forEach((callback) => callback({ code: event.code, reason: event.reason }));
+
+      // Reconnect unless manually closed
+      if (!this.wsManualClose && this.wsConfig.reconnect) {
+        this.scheduleReconnect();
+      }
+    };
+  }
+
+  /**
+   * Schedule WebSocket reconnection with exponential backoff
+   */
+  private scheduleReconnect(): void {
+    if (this.wsReconnectTimer) {
+      return;
+    }
+
+    if (this.wsReconnectAttempts >= this.wsConfig.maxReconnectAttempts) {
+      const listeners = this.wsListeners.get('reconnect_failed');
+      listeners?.forEach((callback) => callback(null));
+      return;
+    }
+
+    const delay = Math.min(
+      this.wsConfig.reconnectInterval * Math.pow(2, this.wsReconnectAttempts),
+      this.wsConfig.maxReconnectInterval
+    );
+
+    this.wsReconnectAttempts++;
+
+    // Notify reconnecting listeners
+    const listeners = this.wsListeners.get('reconnecting');
+    listeners?.forEach((callback) => callback({ attempt: this.wsReconnectAttempts, delay }));
+
+    this.wsReconnectTimer = setTimeout(() => {
+      this.wsReconnectTimer = null;
+      this.connectWebSocket();
+    }, delay);
+  }
+
+  /**
+   * Start heartbeat to keep connection alive
+   */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    
+    this.wsHeartbeatTimer = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, this.wsConfig.heartbeatInterval);
+  }
+
+  /**
+   * Stop heartbeat
+   */
+  private stopHeartbeat(): void {
+    if (this.wsHeartbeatTimer) {
+      clearInterval(this.wsHeartbeatTimer);
+      this.wsHeartbeatTimer = null;
+    }
   }
 
   /**
    * Disconnect WebSocket
    */
   disconnectWebSocket(): void {
+    this.wsManualClose = true;
+    
+    if (this.wsReconnectTimer) {
+      clearTimeout(this.wsReconnectTimer);
+      this.wsReconnectTimer = null;
+    }
+
+    this.stopHeartbeat();
+
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
+
+    this.wsReconnectAttempts = 0;
+  }
+
+  /**
+   * Check if WebSocket is connected
+   */
+  isWebSocketConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
   }
 
   /**
@@ -411,6 +553,27 @@ export class ClawFiClient {
     return () => {
       this.wsListeners.get(type)?.delete(callback);
     };
+  }
+
+  /**
+   * Subscribe to WebSocket connection events
+   */
+  onConnected(callback: () => void): () => void {
+    return this.onMessage('connected', callback as (data: unknown) => void);
+  }
+
+  /**
+   * Subscribe to WebSocket disconnection events
+   */
+  onDisconnected(callback: (event: { code: number; reason: string }) => void): () => void {
+    return this.onMessage('disconnected', callback as (data: unknown) => void);
+  }
+
+  /**
+   * Subscribe to reconnection attempts
+   */
+  onReconnecting(callback: (info: { attempt: number; delay: number }) => void): () => void {
+    return this.onMessage('reconnecting', callback as (data: unknown) => void);
   }
 
   /**
