@@ -96,6 +96,15 @@ function parseCommand(input: string): ParsedCommand {
       args: {},
     };
   }
+
+  // AI Commands - find moonshots
+  if (action === 'moonshot' || action === 'moonshots' || action === 'gems' || action === '10x') {
+    return {
+      action: 'moonshots',
+      target: parts[1], // optional chain filter
+      args: {},
+    };
+  }
   
   return {
     action,
@@ -285,6 +294,11 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
                 'analyze <address> [chain] - AI token analysis',
                 'ask <question> - Get AI trading advice',
                 'rate <signal_id> - Rate a signal with AI',
+                '',
+                '--- Moonshot Finder ---',
+                'moonshots - Find potential 10x tokens',
+                'gems - Same as moonshots',
+                '10x - Same as moonshots',
               ],
             },
           };
@@ -390,6 +404,40 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
                 message: err instanceof Error ? err.message : 'AI rating failed',
               };
             }
+          }
+          break;
+
+        case 'moonshots':
+          try {
+            const moonshotAdvice = await aiService.getMoonshotAdvice();
+            if (moonshotAdvice.topPicks.length === 0) {
+              commandResult = {
+                success: true,
+                action: 'moonshots',
+                message: '🔍 No high-potential moonshots detected right now. Market may be cooling off - check back later.',
+                data: { topPicks: [] },
+              };
+            } else {
+              const topPicksList = moonshotAdvice.topPicks.slice(0, 5).map((m, i) => 
+                `${i + 1}. ${m.symbol} (${m.chain}) - Score: ${m.moonshotScore}/100 - $${m.fdv < 1000000 ? (m.fdv/1000).toFixed(0) + 'K' : (m.fdv/1000000).toFixed(2) + 'M'} mcap`
+              ).join('\n');
+              
+              commandResult = {
+                success: true,
+                action: 'moonshots',
+                message: `🚀 MOONSHOT FINDER\n\n${moonshotAdvice.analysis}\n\n📊 TOP CANDIDATES:\n${topPicksList}\n\n⚠️ ${moonshotAdvice.warnings[0]}`,
+                data: { 
+                  topPicks: moonshotAdvice.topPicks,
+                  warnings: moonshotAdvice.warnings,
+                },
+              };
+            }
+          } catch (err) {
+            commandResult = {
+              success: false,
+              action: 'moonshots',
+              message: err instanceof Error ? err.message : 'Moonshot finder failed',
+            };
           }
           break;
         
@@ -690,6 +738,79 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
         error: {
           code: 'AI_ERROR',
           message: error instanceof Error ? error.message : 'AI advice failed',
+        },
+      });
+    }
+  });
+
+  /**
+   * GET /agent/ai/moonshots
+   * Find potential moonshot tokens
+   */
+  fastify.get('/agent/ai/moonshots', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const { chain, minScore } = request.query as { chain?: string; minScore?: string };
+
+    try {
+      const moonshots = await aiService.findMoonshots({
+        chain,
+        minScore: minScore ? parseInt(minScore) : 40,
+        limit: 10,
+      });
+
+      return {
+        success: true,
+        data: {
+          count: moonshots.length,
+          moonshots,
+        },
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'AI_ERROR',
+          message: error instanceof Error ? error.message : 'Moonshot finder failed',
+        },
+      });
+    }
+  });
+
+  /**
+   * GET /agent/ai/moonshots/advice
+   * Get AI analysis of top moonshot candidates
+   */
+  fastify.get('/agent/ai/moonshots/advice', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    try {
+      const advice = await aiService.getMoonshotAdvice();
+
+      await fastify.auditService.log({
+        action: 'agent_command',
+        userId: request.user.userId,
+        details: {
+          command: 'moonshot_advice',
+          topPicksCount: advice.topPicks.length,
+        },
+        success: true,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return {
+        success: true,
+        data: advice,
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'AI_ERROR',
+          message: error instanceof Error ? error.message : 'Moonshot advice failed',
         },
       });
     }

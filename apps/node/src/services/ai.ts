@@ -167,6 +167,24 @@ export interface TokenData {
   }>;
 }
 
+export interface MoonshotCandidate {
+  symbol: string;
+  name: string;
+  address: string;
+  chain: string;
+  priceUsd: number;
+  priceChange1h: number;
+  priceChange24h: number;
+  volume24h: number;
+  liquidity: number;
+  fdv: number;
+  buys24h: number;
+  sells24h: number;
+  moonshotScore: number; // 0-100, higher = more potential
+  signals: string[];
+  risk: 'extreme' | 'high' | 'medium';
+}
+
 // ============================================
 // AI Service
 // ============================================
@@ -405,6 +423,336 @@ export class AIService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Calculate moonshot score for a token
+   * Looks for early-stage tokens with explosive potential
+   */
+  private calculateMoonshotScore(token: {
+    priceChange1h?: number;
+    priceChange24h?: number;
+    volume24h: number;
+    liquidity: number;
+    fdv: number;
+    buys24h: number;
+    sells24h: number;
+  }): { score: number; signals: string[] } {
+    let score = 0;
+    const signals: string[] = [];
+
+    // LOW MARKET CAP (max 25 points) - Under $5M is prime moonshot territory
+    if (token.fdv > 0) {
+      if (token.fdv < 100000) {
+        score += 25;
+        signals.push('🎯 Micro cap (<$100K) - Maximum upside potential');
+      } else if (token.fdv < 500000) {
+        score += 22;
+        signals.push('🎯 Ultra low cap (<$500K)');
+      } else if (token.fdv < 1000000) {
+        score += 18;
+        signals.push('🎯 Low cap (<$1M)');
+      } else if (token.fdv < 5000000) {
+        score += 12;
+        signals.push('💰 Sub $5M market cap');
+      } else if (token.fdv < 10000000) {
+        score += 5;
+      }
+    }
+
+    // VOLUME TO MCAP RATIO (max 25 points) - High volume relative to cap = interest
+    if (token.fdv > 0 && token.volume24h > 0) {
+      const volumeRatio = token.volume24h / token.fdv;
+      if (volumeRatio > 2) {
+        score += 25;
+        signals.push('🔥 Extreme volume (>200% of mcap) - Major accumulation');
+      } else if (volumeRatio > 1) {
+        score += 20;
+        signals.push('🔥 Very high volume (>100% of mcap)');
+      } else if (volumeRatio > 0.5) {
+        score += 15;
+        signals.push('📈 High volume ratio');
+      } else if (volumeRatio > 0.2) {
+        score += 10;
+      } else if (volumeRatio > 0.1) {
+        score += 5;
+      }
+    }
+
+    // BUY/SELL RATIO (max 20 points) - More buys = accumulation
+    const totalTxns = token.buys24h + token.sells24h;
+    if (totalTxns > 0) {
+      const buyRatio = token.buys24h / totalTxns;
+      if (buyRatio > 0.7) {
+        score += 20;
+        signals.push('🐋 Heavy accumulation (>70% buys)');
+      } else if (buyRatio > 0.6) {
+        score += 15;
+        signals.push('📊 Strong buying pressure');
+      } else if (buyRatio > 0.55) {
+        score += 10;
+        signals.push('📊 Positive buy pressure');
+      } else if (buyRatio < 0.4) {
+        score -= 10;
+        signals.push('⚠️ Selling pressure detected');
+      }
+    }
+
+    // PRICE MOMENTUM (max 15 points)
+    if (token.priceChange1h !== undefined) {
+      if (token.priceChange1h > 50) {
+        score += 15;
+        signals.push('🚀 Pumping NOW (+50% 1h)');
+      } else if (token.priceChange1h > 20) {
+        score += 12;
+        signals.push('🚀 Strong momentum (+20% 1h)');
+      } else if (token.priceChange1h > 10) {
+        score += 8;
+        signals.push('📈 Gaining momentum');
+      } else if (token.priceChange1h < -20) {
+        score -= 5;
+      }
+    }
+
+    if (token.priceChange24h !== undefined && token.priceChange24h > 100) {
+      score += 5;
+      signals.push('💎 Already 2x+ in 24h');
+    }
+
+    // LIQUIDITY CHECK (max 15 points) - Need liquidity but not too much
+    if (token.liquidity > 0) {
+      if (token.liquidity >= 10000 && token.liquidity < 100000) {
+        score += 15;
+        signals.push('💧 Optimal liquidity range ($10K-$100K)');
+      } else if (token.liquidity >= 5000 && token.liquidity < 500000) {
+        score += 10;
+      } else if (token.liquidity < 5000) {
+        score -= 10;
+        signals.push('⚠️ Very low liquidity - high slippage risk');
+      }
+    }
+
+    // Transaction activity bonus
+    if (totalTxns > 500) {
+      score += 5;
+      signals.push('🔄 High transaction count');
+    } else if (totalTxns > 200) {
+      score += 3;
+    }
+
+    return { score: Math.max(0, Math.min(100, score)), signals };
+  }
+
+  /**
+   * Find potential moonshot tokens across all chains
+   */
+  async findMoonshots(options?: { 
+    chain?: string;
+    minScore?: number;
+    limit?: number;
+  }): Promise<MoonshotCandidate[]> {
+    const minScore = options?.minScore || 40;
+    const limit = options?.limit || 10;
+    
+    try {
+      // Fetch data from multiple sources
+      const [dexGainers, newPools, launchpadTokens] = await Promise.all([
+        // Get top gainers from DexScreener
+        fetchDexScreener<{ pairs?: DexScreenerPair[] }>('/latest/dex/tokens/trending'),
+        // Get new pools 
+        this.getGeckoNewPools(options?.chain),
+        // Get recent launchpad tokens
+        this.prisma.launchpadToken.findMany({
+          where: options?.chain ? { chain: options.chain } : {},
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        }),
+      ]);
+
+      const candidates: MoonshotCandidate[] = [];
+
+      // Process DexScreener data
+      if (dexGainers?.pairs) {
+        for (const pair of dexGainers.pairs.slice(0, 30)) {
+          if (options?.chain && pair.chainId !== options.chain) continue;
+          
+          const { score, signals } = this.calculateMoonshotScore({
+            priceChange1h: pair.priceChange?.h1,
+            priceChange24h: pair.priceChange?.h24,
+            volume24h: pair.volume?.h24 || 0,
+            liquidity: pair.liquidity?.usd || 0,
+            fdv: pair.fdv || 0,
+            buys24h: pair.txns?.h24?.buys || 0,
+            sells24h: pair.txns?.h24?.sells || 0,
+          });
+
+          if (score >= minScore) {
+            candidates.push({
+              symbol: pair.baseToken.symbol,
+              name: pair.baseToken.name,
+              address: pair.baseToken.address,
+              chain: pair.chainId,
+              priceUsd: parseFloat(pair.priceUsd || '0'),
+              priceChange1h: pair.priceChange?.h1 || 0,
+              priceChange24h: pair.priceChange?.h24 || 0,
+              volume24h: pair.volume?.h24 || 0,
+              liquidity: pair.liquidity?.usd || 0,
+              fdv: pair.fdv || 0,
+              buys24h: pair.txns?.h24?.buys || 0,
+              sells24h: pair.txns?.h24?.sells || 0,
+              moonshotScore: score,
+              signals,
+              risk: score > 70 ? 'extreme' : score > 50 ? 'high' : 'medium',
+            });
+          }
+        }
+      }
+
+      // Also check launchpad tokens that might be early gems
+      for (const token of launchpadTokens) {
+        // Get live data for launchpad token
+        const liveData = await this.getDexScreenerToken(token.tokenAddress);
+        if (!liveData) continue;
+
+        const { score, signals } = this.calculateMoonshotScore({
+          priceChange24h: liveData.priceChange24h,
+          volume24h: liveData.volume24h,
+          liquidity: liveData.liquidity,
+          fdv: liveData.fdv,
+          buys24h: liveData.buys24h,
+          sells24h: liveData.sells24h,
+        });
+
+        // Add launchpad context
+        signals.push(`📍 From ${token.launchpad}`);
+
+        if (score >= minScore) {
+          // Check if already in list
+          if (!candidates.find(c => c.address.toLowerCase() === token.tokenAddress.toLowerCase())) {
+            candidates.push({
+              symbol: liveData.symbol,
+              name: liveData.name,
+              address: token.tokenAddress,
+              chain: token.chain,
+              priceUsd: liveData.priceUsd,
+              priceChange1h: 0,
+              priceChange24h: liveData.priceChange24h,
+              volume24h: liveData.volume24h,
+              liquidity: liveData.liquidity,
+              fdv: liveData.fdv,
+              buys24h: liveData.buys24h,
+              sells24h: liveData.sells24h,
+              moonshotScore: score,
+              signals,
+              risk: score > 70 ? 'extreme' : score > 50 ? 'high' : 'medium',
+            });
+          }
+        }
+      }
+
+      // Sort by moonshot score and return top candidates
+      return candidates
+        .sort((a, b) => b.moonshotScore - a.moonshotScore)
+        .slice(0, limit);
+    } catch (error) {
+      console.error('Error finding moonshots:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get specific buy recommendations with moonshot potential
+   */
+  async getMoonshotAdvice(): Promise<{
+    topPicks: MoonshotCandidate[];
+    analysis: string;
+    warnings: string[];
+  }> {
+    const moonshots = await this.findMoonshots({ minScore: 45, limit: 5 });
+    
+    if (moonshots.length === 0) {
+      return {
+        topPicks: [],
+        analysis: 'No high-potential moonshots detected right now. Market may be cooling off.',
+        warnings: ['Markets are cyclical - patience is key', 'Never invest more than you can afford to lose'],
+      };
+    }
+
+    // Use AI to provide analysis of the top picks
+    if (this.openai) {
+      const prompt = `You are Clawf, an aggressive crypto moonshot hunter. Analyze these potential 10x plays and give SPECIFIC, ACTIONABLE advice.
+
+TOP MOONSHOT CANDIDATES (sorted by potential):
+${moonshots.map((m, i) => `
+${i + 1}. ${m.symbol} (${m.name}) on ${m.chain}
+   - Address: ${m.address}
+   - Price: $${m.priceUsd.toFixed(8)}
+   - Market Cap: $${m.fdv.toLocaleString()}
+   - 24h Volume: $${m.volume24h.toLocaleString()}
+   - Liquidity: $${m.liquidity.toLocaleString()}
+   - 24h Change: ${m.priceChange24h > 0 ? '+' : ''}${m.priceChange24h.toFixed(1)}%
+   - Buy/Sell: ${m.buys24h}/${m.sells24h}
+   - Moonshot Score: ${m.moonshotScore}/100
+   - Signals: ${m.signals.join(', ')}
+`).join('')}
+
+Provide:
+1. Which ONE token has the best 10x potential right now and WHY
+2. Specific entry strategy (buy immediately, wait for dip, etc.)
+3. Target price/exit strategy
+4. Key risks to watch
+
+Be DIRECT and SPECIFIC. This is for experienced degen traders who want alpha, not generic advice.
+
+Respond in JSON:
+{
+  "topPick": "<symbol>",
+  "analysis": "<2-3 sentences on why this could 10x>",
+  "entryStrategy": "<specific entry advice>",
+  "targetMultiple": "<realistic target like 5x, 10x, 20x>",
+  "exitStrategy": "<when to take profits>",
+  "keyRisk": "<main risk to watch>"
+}`;
+
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: this.model,
+          messages: [
+            { role: 'system', content: 'You are Clawf, an aggressive moonshot hunter. Be specific and actionable. No generic advice.' },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.8,
+          max_tokens: 500,
+        });
+
+        const content = response.choices[0]?.message?.content || '{}';
+        const jsonContent = content.replace(/```json\n?|\n?```/g, '').trim();
+        const advice = JSON.parse(jsonContent);
+
+        return {
+          topPicks: moonshots,
+          analysis: `🎯 TOP PICK: ${advice.topPick}\n\n${advice.analysis}\n\n📈 Entry: ${advice.entryStrategy}\n🎯 Target: ${advice.targetMultiple}\n💰 Exit: ${advice.exitStrategy}\n⚠️ Risk: ${advice.keyRisk}`,
+          warnings: [
+            'These are EXTREME risk plays - only use money you can 100% lose',
+            'Moonshots fail more often than they succeed',
+            'Always verify contract on explorer before buying',
+            'Set stop losses and stick to them',
+          ],
+        };
+      } catch {
+        // Fallback without AI analysis
+      }
+    }
+
+    return {
+      topPicks: moonshots,
+      analysis: `Found ${moonshots.length} potential moonshots. Top pick: ${moonshots[0].symbol} with score ${moonshots[0].moonshotScore}/100`,
+      warnings: [
+        'These are EXTREME risk plays',
+        'Always DYOR before buying',
+        'Never invest more than you can afford to lose',
+      ],
+    };
   }
 
   /**
