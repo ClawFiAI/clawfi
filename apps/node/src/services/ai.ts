@@ -16,6 +16,14 @@ import type { PrismaClient } from '@prisma/client';
 // ============================================
 
 const DEXSCREENER_API = 'https://api.dexscreener.com';
+const GECKOTERMINAL_API = 'https://api.geckoterminal.com/api/v2';
+
+// Block Explorer APIs
+const EXPLORER_APIS: Record<string, { url: string; keyEnv: string }> = {
+  ethereum: { url: 'https://api.etherscan.io/api', keyEnv: 'ETHERSCAN_API_KEY' },
+  base: { url: 'https://api.basescan.org/api', keyEnv: 'BASESCAN_API_KEY' },
+  bsc: { url: 'https://api.bscscan.com/api', keyEnv: 'BSCSCAN_API_KEY' },
+};
 
 interface DexScreenerPair {
   chainId: string;
@@ -38,6 +46,27 @@ interface DexScreenerBoost {
   amount?: number;
 }
 
+interface GeckoPool {
+  id: string;
+  attributes: {
+    name: string;
+    address: string;
+    base_token_price_usd: string | null;
+    fdv_usd: string | null;
+    reserve_in_usd: string | null;
+    volume_usd?: { h24?: string };
+    price_change_percentage?: { h24?: string };
+  };
+}
+
+interface ExplorerTokenInfo {
+  contractAddress: string;
+  tokenName: string;
+  symbol: string;
+  divisor: string;
+  totalSupply: string;
+}
+
 async function fetchDexScreener<T>(endpoint: string): Promise<T | null> {
   try {
     const response = await fetch(`${DEXSCREENER_API}${endpoint}`, {
@@ -45,6 +74,43 @@ async function fetchDexScreener<T>(endpoint: string): Promise<T | null> {
     });
     if (!response.ok) return null;
     return await response.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGeckoTerminal<T>(endpoint: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${GECKOTERMINAL_API}${endpoint}`, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'ClawFi/0.2.0' },
+    });
+    if (!response.ok) return null;
+    return await response.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchExplorer(chain: string, params: Record<string, string>): Promise<Record<string, unknown> | null> {
+  const config = EXPLORER_APIS[chain];
+  if (!config) return null;
+  
+  const apiKey = process.env[config.keyEnv];
+  if (!apiKey) return null;
+  
+  try {
+    const url = new URL(config.url);
+    url.searchParams.set('apikey', apiKey);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    
+    const response = await fetch(url.toString(), {
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) return null;
+    
+    const data = await response.json() as { status: string; result: unknown };
+    if (data.status !== '1') return null;
+    return data.result as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -218,6 +284,126 @@ export class AIService {
       }));
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Get trending pools from GeckoTerminal (Uniswap, PancakeSwap, etc.)
+   */
+  async getGeckoTrendingPools(network?: string): Promise<Array<{
+    name: string;
+    chain: string;
+    address: string;
+    priceUsd: number;
+    volume24h: number;
+    liquidity: number;
+  }>> {
+    try {
+      const endpoint = network 
+        ? `/networks/${network}/trending_pools`
+        : '/networks/trending_pools';
+      const data = await fetchGeckoTerminal<{ data?: GeckoPool[] }>(endpoint);
+      if (!data?.data) return [];
+      
+      return data.data.slice(0, 10).map(pool => ({
+        name: pool.attributes.name,
+        chain: pool.id.split('_')[0],
+        address: pool.attributes.address,
+        priceUsd: parseFloat(pool.attributes.base_token_price_usd || '0'),
+        volume24h: parseFloat(pool.attributes.volume_usd?.h24 || '0'),
+        liquidity: parseFloat(pool.attributes.reserve_in_usd || '0'),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get new pools from GeckoTerminal
+   */
+  async getGeckoNewPools(network?: string): Promise<Array<{
+    name: string;
+    chain: string;
+    address: string;
+    liquidity: number;
+  }>> {
+    try {
+      const endpoint = network 
+        ? `/networks/${network}/new_pools`
+        : '/networks/new_pools';
+      const data = await fetchGeckoTerminal<{ data?: GeckoPool[] }>(endpoint);
+      if (!data?.data) return [];
+      
+      return data.data.slice(0, 10).map(pool => ({
+        name: pool.attributes.name,
+        chain: pool.id.split('_')[0],
+        address: pool.attributes.address,
+        liquidity: parseFloat(pool.attributes.reserve_in_usd || '0'),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get token info from block explorer (Etherscan/Basescan/BSCScan)
+   */
+  async getExplorerTokenInfo(chain: string, address: string): Promise<{
+    name: string;
+    symbol: string;
+    totalSupply: string;
+    decimals: number;
+    verified: boolean;
+  } | null> {
+    try {
+      // Get token info
+      const tokenInfo = await fetchExplorer(chain, {
+        module: 'token',
+        action: 'tokeninfo',
+        contractaddress: address,
+      }) as ExplorerTokenInfo | null;
+      
+      if (!tokenInfo) return null;
+      
+      // Check if contract is verified
+      const sourceCode = await fetchExplorer(chain, {
+        module: 'contract',
+        action: 'getsourcecode',
+        address: address,
+      }) as Array<{ SourceCode?: string }> | null;
+      
+      const verified = !!(sourceCode?.[0]?.SourceCode);
+      
+      return {
+        name: tokenInfo.tokenName || 'Unknown',
+        symbol: tokenInfo.symbol || '???',
+        totalSupply: tokenInfo.totalSupply || '0',
+        decimals: parseInt(tokenInfo.divisor) || 18,
+        verified,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get contract holder count from explorer
+   */
+  async getExplorerHolders(chain: string, address: string): Promise<number | null> {
+    try {
+      // Note: This endpoint may not be available on all explorers
+      const data = await fetchExplorer(chain, {
+        module: 'token',
+        action: 'tokenholderlist',
+        contractaddress: address,
+        page: '1',
+        offset: '1',
+      }) as Array<unknown> | null;
+      
+      // If we get a response, there are holders
+      return data ? data.length : null;
+    } catch {
+      return null;
     }
   }
 
@@ -398,8 +584,8 @@ Rate this signal in the following JSON format ONLY:
       throw new Error('AI service not configured. Set OPENAI_API_KEY in environment.');
     }
 
-    // Get comprehensive context from the database AND DexScreener - all chains and launchpads
-    const [recentSignals, watchedTokens, recentLaunches, dexTrending] = await Promise.all([
+    // Get comprehensive context from all data sources
+    const [recentSignals, watchedTokens, recentLaunches, dexTrending, geckoTrending, geckoNewPools] = await Promise.all([
       this.prisma.signal.findMany({
         orderBy: { ts: 'desc' },
         take: 10,
@@ -425,6 +611,10 @@ Rate this signal in the following JSON format ONLY:
       }),
       // Get DexScreener trending tokens
       this.getDexScreenerTrending(),
+      // Get GeckoTerminal trending pools (Uniswap, PancakeSwap, etc.)
+      this.getGeckoTrendingPools(),
+      // Get new pools from all DEXes
+      this.getGeckoNewPools(),
     ]);
 
     // Group launches by launchpad
@@ -452,6 +642,16 @@ Rate this signal in the following JSON format ONLY:
         `${chain}: ${tokens.slice(0, 3).map(t => `${t.address.slice(0, 10)} (${t.boosts} boosts)`).join(', ')}`
       ).join('\n  ');
 
+    // Format GeckoTerminal trending pools (Uniswap, etc.)
+    const geckoTrendingContext = geckoTrending.slice(0, 8)
+      .map(p => `${p.name} on ${p.chain} ($${(p.volume24h / 1000000).toFixed(1)}M vol)`)
+      .join(', ');
+
+    // Format new pools
+    const newPoolsContext = geckoNewPools.slice(0, 5)
+      .map(p => `${p.name} on ${p.chain}`)
+      .join(', ');
+
     const contextStr = `
 CURRENT CONTEXT:
 - Watched Tokens: ${watchedTokens.map(t => `${t.tokenSymbol || t.tokenAddress} (${t.chain})`).join(', ') || 'None'}
@@ -460,6 +660,10 @@ CURRENT CONTEXT:
   ${launchpadContext || 'No recent launches'}
 - DexScreener Trending (by chain):
   ${dexContext || 'No trending data'}
+- DEX Trending Pools (Uniswap/PancakeSwap/etc):
+  ${geckoTrendingContext || 'No data'}
+- New DEX Pools:
+  ${newPoolsContext || 'No new pools'}
 ${context?.watchedTokens ? `- User Portfolio: ${context.watchedTokens.join(', ')}` : ''}
 `;
 
@@ -467,21 +671,35 @@ ${context?.watchedTokens ? `- User Portfolio: ${context.watchedTokens.join(', ')
 
 DATA SOURCES:
 - DexScreener - Real-time market data, trending tokens, price/volume across 80+ chains
+- GeckoTerminal - DEX pool data from Uniswap, PancakeSwap, and all major DEXes
+- Block Explorers - Etherscan, Basescan, BSCScan for contract verification & holder data
 - Launchpad tokens - New launches from Clanker, Four.meme, Pump.fun
 - Internal signals - Risk alerts, whale movements, liquidity changes
+
+SUPPORTED DEXes:
+- Uniswap (Ethereum, Base, Arbitrum, Polygon, etc.)
+- PancakeSwap (BSC)
+- Raydium (Solana)
+- Aerodrome (Base)
+- And 100+ more DEXes via GeckoTerminal
 
 SUPPORTED PLATFORMS:
 - Clanker (Base) - Base chain token launchpad
 - Four.meme (BSC) - BNB Smart Chain meme token launchpad  
 - Pump.fun (Solana) - Solana meme token launchpad
-- DexScreener - Universal market data aggregator
+- DexScreener/GeckoTerminal - Universal market data aggregators
+
+BLOCK EXPLORERS:
+- Etherscan - Ethereum contract data
+- Basescan - Base contract data  
+- BSCScan - BNB Chain contract data
 
 SUPPORTED CHAINS:
+- Ethereum - Main EVM chain
 - Base (EVM) - Layer 2 on Ethereum
 - BSC/BNB Smart Chain (EVM) - Binance's chain
 - Solana - High-speed non-EVM chain
-- Ethereum - Main EVM chain
-- And 80+ more chains via DexScreener
+- Arbitrum, Polygon, Optimism, Avalanche, and 80+ more
 
 ${contextStr}
 
