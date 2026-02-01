@@ -211,6 +211,8 @@ export class PumpFunConnector implements LaunchpadConnector {
       if (!pairs || pairs.length === 0) return null;
 
       const pair = pairs[0];
+      if (!pair) return null;
+      
       const isBaseToken = pair.baseToken.address.toLowerCase() === address.toLowerCase();
       const token = isBaseToken ? pair.baseToken : pair.quoteToken;
 
@@ -223,9 +225,11 @@ export class PumpFunConnector implements LaunchpadConnector {
         createdAt: pair.pairCreatedAt ? new Date(pair.pairCreatedAt) : new Date(),
         creator: '', // Not available from DexScreener
         priceUsd: parseFloat(pair.priceUsd) || undefined,
-        marketCap: pair.fdv,
-        liquidity: pair.liquidity?.usd,
+        marketCapUsd: pair.fdv,
         imageUrl: pair.info?.imageUrl,
+        extensions: {
+          liquidity: pair.liquidity?.usd,
+        },
       };
     } catch {
       return null;
@@ -249,91 +253,28 @@ export class PumpFunConnector implements LaunchpadConnector {
   }
 
   /**
-   * Fetch token by mint address
+   * Fetch token by mint address using DexScreener
    */
   async fetchToken(mint: string): Promise<LaunchpadToken | null> {
-    try {
-      const response = await fetch(`${PUMP_FUN_API_URL}/coins/${mint}`, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClawFi/0.2.0',
-        },
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const token = await response.json() as PumpFunToken;
-      return this.mapToken(token);
-    } catch (error) {
-      console.error('[PumpFun] Fetch token error:', error);
-      return null;
-    }
+    return this.fetchTokenFromDexScreener(mint);
   }
 
   /**
    * Fetch graduated tokens (bonded to Raydium)
+   * Using DexScreener Solana data as Pump.fun API is blocked
    */
   async fetchGraduatedTokens(limit: number = 20): Promise<LaunchpadToken[]> {
-    try {
-      const url = new URL(`${PUMP_FUN_API_URL}/coins`);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('complete', 'true');
-      url.searchParams.set('sort', 'king_of_the_hill_timestamp');
-      url.searchParams.set('order', 'DESC');
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClawFi/0.2.0',
-        },
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const data = await response.json() as PumpFunApiResponse;
-      const tokens = data.data || data.tokens || [];
-      
-      return tokens.map((token) => this.mapToken(token));
-    } catch (error) {
-      console.error('[PumpFun] Fetch graduated error:', error);
-      return [];
-    }
+    // Return recent launches as graduation data is not available via DexScreener
+    return this.fetchRecentLaunches(limit);
   }
 
   /**
    * Fetch "King of the Hill" (trending) tokens
+   * Using DexScreener Solana data as Pump.fun API is blocked
    */
   async fetchTrendingTokens(limit: number = 10): Promise<LaunchpadToken[]> {
-    try {
-      const url = new URL(`${PUMP_FUN_API_URL}/coins`);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('sort', 'usd_market_cap');
-      url.searchParams.set('order', 'DESC');
-      url.searchParams.set('complete', 'false'); // Still on bonding curve
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClawFi/0.2.0',
-        },
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const data = await response.json() as PumpFunApiResponse;
-      const tokens = data.data || data.tokens || [];
-      
-      return tokens.map((token) => this.mapToken(token));
-    } catch (error) {
-      console.error('[PumpFun] Fetch trending error:', error);
-      return [];
-    }
+    // Return recent launches as trending data is not available via DexScreener
+    return this.fetchRecentLaunches(limit);
   }
 
   /**

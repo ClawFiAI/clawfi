@@ -178,7 +178,7 @@ export class FourMemeConnector implements LaunchpadConnector {
       
       // Filter by minimum market cap if set
       if (this.config.minMarketCapUsd > 0) {
-        return tokens.filter(t => (t.marketCap || 0) >= this.config.minMarketCapUsd);
+        return tokens.filter(t => (t.marketCapUsd || 0) >= this.config.minMarketCapUsd);
       }
       
       return tokens;
@@ -217,6 +217,8 @@ export class FourMemeConnector implements LaunchpadConnector {
       if (!pairs || pairs.length === 0) return null;
 
       const pair = pairs[0];
+      if (!pair) return null;
+      
       const isBaseToken = pair.baseToken.address.toLowerCase() === address.toLowerCase();
       const token = isBaseToken ? pair.baseToken : pair.quoteToken;
 
@@ -229,9 +231,11 @@ export class FourMemeConnector implements LaunchpadConnector {
         createdAt: pair.pairCreatedAt ? new Date(pair.pairCreatedAt) : new Date(),
         creator: '', // Not available from DexScreener
         priceUsd: parseFloat(pair.priceUsd) || undefined,
-        marketCap: pair.fdv,
-        liquidity: pair.liquidity?.usd,
+        marketCapUsd: pair.fdv,
         imageUrl: pair.info?.imageUrl,
+        extensions: {
+          liquidity: pair.liquidity?.usd,
+        },
       };
     } catch {
       return null;
@@ -263,76 +267,20 @@ export class FourMemeConnector implements LaunchpadConnector {
 
   /**
    * Fetch graduated tokens (listed on PancakeSwap)
+   * Using DexScreener BSC data as Four.meme API is not available
    */
   async fetchGraduatedTokens(limit: number = 20): Promise<LaunchpadToken[]> {
-    try {
-      const url = new URL(`${FOURMEME_API_URL}/tokens`);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('status', 'graduated');
-      url.searchParams.set('sort', 'graduatedAt');
-      url.searchParams.set('order', 'desc');
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClawFi/0.2.0',
-        },
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const json = await response.json() as FourMemeApiResponse;
-      let tokens: FourMemeToken[] = [];
-      if (Array.isArray(json.data)) {
-        tokens = json.data;
-      } else if (json.data && 'list' in json.data) {
-        tokens = json.data.list || [];
-      }
-      
-      return tokens.map((token) => this.mapToken(token));
-    } catch (error) {
-      console.error('[FourMeme] Fetch graduated error:', error);
-      return [];
-    }
+    // Return recent launches as graduation data is not available via DexScreener
+    return this.fetchRecentLaunches(limit);
   }
 
   /**
    * Fetch trending tokens by market cap
+   * Using DexScreener BSC data as Four.meme API is not available
    */
   async fetchTrendingTokens(limit: number = 10): Promise<LaunchpadToken[]> {
-    try {
-      const url = new URL(`${FOURMEME_API_URL}/tokens`);
-      url.searchParams.set('limit', String(limit));
-      url.searchParams.set('sort', 'marketCap');
-      url.searchParams.set('order', 'desc');
-      url.searchParams.set('status', 'active');
-
-      const response = await fetch(url.toString(), {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClawFi/0.2.0',
-        },
-      });
-
-      if (!response.ok) {
-        return [];
-      }
-
-      const json = await response.json() as FourMemeApiResponse;
-      let tokens: FourMemeToken[] = [];
-      if (Array.isArray(json.data)) {
-        tokens = json.data;
-      } else if (json.data && 'list' in json.data) {
-        tokens = json.data.list || [];
-      }
-      
-      return tokens.map((token) => this.mapToken(token));
-    } catch (error) {
-      console.error('[FourMeme] Fetch trending error:', error);
-      return [];
-    }
+    // Return recent launches as trending data is not available via DexScreener
+    return this.fetchRecentLaunches(limit);
   }
 
   /**
