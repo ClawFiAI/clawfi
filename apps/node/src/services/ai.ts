@@ -114,13 +114,32 @@ export class AIService {
       ts: s.ts,
     }));
 
-    const prompt = `You are Clawf, the AI trading analyst for ClawFi - a DeFi intelligence platform. Analyze this token and provide a structured assessment.
+    // Try to find launchpad info for this token
+    const launchpadToken = await this.prisma.launchpadToken.findFirst({
+      where: {
+        tokenAddress: { equals: tokenData.address, mode: 'insensitive' },
+      },
+      select: { launchpad: true, chain: true, createdAt: true, creatorAddress: true },
+    });
+
+    const launchpadInfo = launchpadToken 
+      ? `\n- Launchpad: ${launchpadToken.launchpad} (${launchpadToken.chain})\n- Launch Date: ${launchpadToken.createdAt.toISOString()}\n- Creator: ${launchpadToken.creatorAddress}`
+      : '';
+
+    const prompt = `You are Clawf, the AI trading analyst for ClawFi - a multi-chain DeFi intelligence platform.
+
+SUPPORTED PLATFORMS:
+- Clanker (Base) - Base chain token launchpad
+- Four.meme (BSC) - BNB Smart Chain meme token launchpad
+- Pump.fun (Solana) - Solana meme token launchpad
+
+Analyze this token and provide a structured assessment.
 
 TOKEN DATA:
 - Address: ${tokenData.address}
 - Symbol: ${tokenData.symbol || 'Unknown'}
 - Name: ${tokenData.name || 'Unknown'}
-- Chain: ${tokenData.chain}
+- Chain: ${tokenData.chain}${launchpadInfo}
 - Current Price: $${tokenData.price?.toFixed(8) || 'Unknown'}
 - 24h Price Change: ${tokenData.priceChange24h?.toFixed(2) || 'Unknown'}%
 - 24h Volume: $${tokenData.volume24h?.toLocaleString() || 'Unknown'}
@@ -248,28 +267,67 @@ Rate this signal in the following JSON format ONLY:
       throw new Error('AI service not configured. Set OPENAI_API_KEY in environment.');
     }
 
-    // Get some context from the database
-    const [recentSignals, watchedTokens] = await Promise.all([
+    // Get comprehensive context from the database - all chains and launchpads
+    const [recentSignals, watchedTokens, recentLaunches] = await Promise.all([
       this.prisma.signal.findMany({
         orderBy: { ts: 'desc' },
-        take: 5,
-        select: { signalType: true, summary: true, tokenSymbol: true, severity: true },
+        take: 10,
+        select: { signalType: true, summary: true, tokenSymbol: true, severity: true, chain: true },
       }),
       this.prisma.watchedToken.findMany({
         where: { enabled: true },
         take: 10,
         select: { tokenSymbol: true, tokenAddress: true, chain: true },
       }),
+      // Get recent launches from ALL launchpads
+      this.prisma.launchpadToken.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 15,
+        select: { 
+          tokenSymbol: true, 
+          tokenName: true, 
+          tokenAddress: true, 
+          chain: true, 
+          launchpad: true,
+          createdAt: true 
+        },
+      }),
     ]);
+
+    // Group launches by launchpad
+    const launchpadGroups: Record<string, typeof recentLaunches> = {};
+    for (const launch of recentLaunches) {
+      const key = `${launch.launchpad} (${launch.chain})`;
+      if (!launchpadGroups[key]) launchpadGroups[key] = [];
+      launchpadGroups[key].push(launch);
+    }
+
+    const launchpadContext = Object.entries(launchpadGroups)
+      .map(([platform, tokens]) => 
+        `${platform}: ${tokens.slice(0, 5).map(t => t.tokenSymbol || t.tokenName || t.tokenAddress.slice(0, 10)).join(', ')}`
+      ).join('\n  ');
 
     const contextStr = `
 CURRENT CONTEXT:
-- Watched Tokens: ${watchedTokens.map(t => t.tokenSymbol || t.tokenAddress).join(', ') || 'None'}
-- Recent Signals: ${recentSignals.map(s => `[${s.severity}] ${s.signalType}: ${s.summary}`).join('; ') || 'None'}
+- Watched Tokens: ${watchedTokens.map(t => `${t.tokenSymbol || t.tokenAddress} (${t.chain})`).join(', ') || 'None'}
+- Recent Signals: ${recentSignals.map(s => `[${s.severity}/${s.chain || 'unknown'}] ${s.signalType}: ${s.summary}`).join('; ') || 'None'}
+- Recent Launches by Platform:
+  ${launchpadContext || 'No recent launches'}
 ${context?.watchedTokens ? `- User Portfolio: ${context.watchedTokens.join(', ')}` : ''}
 `;
 
-    const prompt = `You are Clawf, ClawFi's crypto trading advisor. You help users make informed decisions about DeFi trading on chains like Base, Solana, and Ethereum.
+    const prompt = `You are Clawf, ClawFi's crypto trading advisor. You help users make informed decisions about DeFi trading across multiple chains and launchpads:
+
+SUPPORTED PLATFORMS:
+- Clanker (Base) - Base chain token launchpad
+- Four.meme (BSC) - BNB Smart Chain meme token launchpad  
+- Pump.fun (Solana) - Solana meme token launchpad
+
+SUPPORTED CHAINS:
+- Base (EVM) - Layer 2 on Ethereum
+- BSC/BNB Smart Chain (EVM) - Binance's chain
+- Solana - High-speed non-EVM chain
+- Ethereum - Main EVM chain
 
 ${contextStr}
 
@@ -359,6 +417,12 @@ Respond in the following JSON format ONLY:
 
     const prompt = `You are Clawf, ClawFi's command interpreter. Parse the user's natural language input into a structured command.
 
+SUPPORTED CHAINS & LAUNCHPADS:
+- base: Base chain (Clanker launchpad)
+- bsc: BNB Smart Chain (Four.meme launchpad)
+- solana: Solana (Pump.fun launchpad)
+- eth: Ethereum mainnet
+
 Available intents:
 - analyze_token: Analyze a specific token (needs: address or symbol, chain)
 - watch_token: Add token to watchlist (needs: address, chain)
@@ -376,7 +440,7 @@ Respond in JSON format ONLY:
   "entities": {
     "address": "<if mentioned>",
     "symbol": "<if mentioned>",
-    "chain": "<if mentioned, default: base>"
+    "chain": "<if mentioned - detect from context: base/bsc/solana/eth, default: base>"
   },
   "response": "<natural language response to confirm understanding>"
 }`;
