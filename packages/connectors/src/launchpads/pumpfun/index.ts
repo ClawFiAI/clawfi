@@ -63,7 +63,8 @@ const DEFAULT_CONFIG: Required<PumpFunConfig> = {
   graduationOnly: false,
 };
 
-const PUMP_FUN_API_URL = 'https://frontend-api.pump.fun';
+// Pump.fun frontend API is often blocked, use DexScreener as fallback
+const DEXSCREENER_API_URL = 'https://api.dexscreener.com';
 const SOLSCAN_URL = 'https://solscan.io';
 
 // ============================================
@@ -92,13 +93,14 @@ export class PumpFunConnector implements LaunchpadConnector {
   }
 
   /**
-   * Get connector status
+   * Get connector status - uses DexScreener Solana data
    */
   async getStatus(): Promise<{ connected: boolean; latencyMs?: number; error?: string }> {
     const start = Date.now();
     
     try {
-      const response = await fetch(`${PUMP_FUN_API_URL}/coins?limit=1&sort=created_timestamp&order=DESC`, {
+      // Use DexScreener to check Solana connectivity
+      const response = await fetch(`${DEXSCREENER_API_URL}/latest/dex/search?q=solana`, {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'ClawFi/0.2.0',
@@ -108,7 +110,7 @@ export class PumpFunConnector implements LaunchpadConnector {
       if (!response.ok) {
         return {
           connected: false,
-          error: `API returned ${response.status}`,
+          error: `DexScreener API returned ${response.status}`,
         };
       }
 
@@ -125,23 +127,14 @@ export class PumpFunConnector implements LaunchpadConnector {
   }
 
   /**
-   * Fetch recent token launches
+   * Fetch recent token launches from DexScreener (Solana new pairs)
    */
   async fetchRecentLaunches(limit?: number): Promise<LaunchpadToken[]> {
     const tokensLimit = limit || this.config.maxTokensPerRequest;
     
     try {
-      const url = new URL(`${PUMP_FUN_API_URL}/coins`);
-      url.searchParams.set('limit', String(tokensLimit));
-      url.searchParams.set('sort', 'created_timestamp');
-      url.searchParams.set('order', 'DESC');
-      
-      // If graduation only, add filter
-      if (this.config.graduationOnly) {
-        url.searchParams.set('complete', 'true');
-      }
-
-      const response = await fetch(url.toString(), {
+      // Use DexScreener to get latest Solana tokens
+      const response = await fetch(`${DEXSCREENER_API_URL}/token-profiles/latest/v1`, {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'ClawFi/0.2.0',
@@ -149,19 +142,93 @@ export class PumpFunConnector implements LaunchpadConnector {
       });
 
       if (!response.ok) {
-        console.error(`[PumpFun] API error: ${response.status}`);
+        console.error(`[PumpFun] DexScreener API error: ${response.status}`);
         return [];
       }
 
-      const data = await response.json() as PumpFunApiResponse;
-      const tokens = data.data || data.tokens || [];
+      const profiles = await response.json() as Array<{
+        url: string;
+        chainId: string;
+        tokenAddress: string;
+        icon?: string;
+        description?: string;
+      }>;
+      
+      // Filter to Solana tokens only
+      const solanaProfiles = profiles
+        .filter(p => p.chainId === 'solana')
+        .slice(0, tokensLimit);
 
       this.lastFetchTime = Date.now();
+
+      // Convert to our format
+      const tokens: LaunchpadToken[] = [];
       
-      return tokens.map((token) => this.mapToken(token));
+      for (const profile of solanaProfiles.slice(0, 20)) {
+        try {
+          const tokenData = await this.fetchTokenFromDexScreener(profile.tokenAddress);
+          if (tokenData) {
+            tokens.push(tokenData);
+          }
+        } catch {
+          // Skip failed tokens
+        }
+      }
+      
+      return tokens;
     } catch (error) {
       console.error('[PumpFun] Fetch error:', error);
       return [];
+    }
+  }
+
+  /**
+   * Fetch token data from DexScreener
+   */
+  private async fetchTokenFromDexScreener(address: string): Promise<LaunchpadToken | null> {
+    try {
+      const response = await fetch(`${DEXSCREENER_API_URL}/tokens/v1/solana/${address}`, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'ClawFi/0.2.0',
+        },
+      });
+
+      if (!response.ok) return null;
+
+      const pairs = await response.json() as Array<{
+        chainId: string;
+        pairAddress: string;
+        baseToken: { address: string; name: string; symbol: string };
+        quoteToken: { address: string; name: string; symbol: string };
+        priceUsd: string;
+        liquidity?: { usd: number };
+        fdv?: number;
+        pairCreatedAt?: number;
+        info?: { imageUrl?: string };
+      }>;
+
+      if (!pairs || pairs.length === 0) return null;
+
+      const pair = pairs[0];
+      const isBaseToken = pair.baseToken.address.toLowerCase() === address.toLowerCase();
+      const token = isBaseToken ? pair.baseToken : pair.quoteToken;
+
+      return {
+        launchpad: 'pumpfun',
+        chain: 'solana',
+        address: token.address,
+        symbol: token.symbol,
+        name: token.name,
+        createdAt: pair.pairCreatedAt ? new Date(pair.pairCreatedAt) : new Date(),
+        creator: '', // Not available from DexScreener
+        priceUsd: parseFloat(pair.priceUsd) || undefined,
+        marketCap: pair.fdv,
+        liquidity: pair.liquidity?.usd,
+        imageUrl: pair.info?.imageUrl,
+      };
+    } catch {
+      return null;
     }
   }
 

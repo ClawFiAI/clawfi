@@ -61,7 +61,8 @@ const DEFAULT_CONFIG: Required<FourMemeConfig> = {
   minMarketCapUsd: 0,
 };
 
-const FOURMEME_API_URL = 'https://four.meme/api';
+// Four.meme API is GraphQL-only (Bitquery), use DexScreener for BSC data as fallback
+const DEXSCREENER_API_URL = 'https://api.dexscreener.com';
 const BSCSCAN_URL = 'https://bscscan.com';
 
 // ============================================
@@ -90,13 +91,14 @@ export class FourMemeConnector implements LaunchpadConnector {
   }
 
   /**
-   * Get connector status
+   * Get connector status - uses DexScreener BSC data
    */
   async getStatus(): Promise<{ connected: boolean; latencyMs?: number; error?: string }> {
     const start = Date.now();
     
     try {
-      const response = await fetch(`${FOURMEME_API_URL}/tokens?limit=1&sort=created`, {
+      // Use DexScreener to check BSC connectivity
+      const response = await fetch(`${DEXSCREENER_API_URL}/latest/dex/search?q=bsc`, {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'ClawFi/0.2.0',
@@ -106,7 +108,7 @@ export class FourMemeConnector implements LaunchpadConnector {
       if (!response.ok) {
         return {
           connected: false,
-          error: `API returned ${response.status}`,
+          error: `DexScreener API returned ${response.status}`,
         };
       }
 
@@ -123,18 +125,15 @@ export class FourMemeConnector implements LaunchpadConnector {
   }
 
   /**
-   * Fetch recent token launches
+   * Fetch recent token launches from DexScreener (BSC new pairs)
    */
   async fetchRecentLaunches(limit?: number): Promise<LaunchpadToken[]> {
     const tokensLimit = limit || this.config.maxTokensPerRequest;
     
     try {
-      const url = new URL(`${FOURMEME_API_URL}/tokens`);
-      url.searchParams.set('limit', String(tokensLimit));
-      url.searchParams.set('sort', 'created');
-      url.searchParams.set('order', 'desc');
-
-      const response = await fetch(url.toString(), {
+      // Use DexScreener to get latest BSC tokens
+      // Search for recent tokens with low liquidity (likely new launches)
+      const response = await fetch(`${DEXSCREENER_API_URL}/token-profiles/latest/v1`, {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'ClawFi/0.2.0',
@@ -142,31 +141,100 @@ export class FourMemeConnector implements LaunchpadConnector {
       });
 
       if (!response.ok) {
-        console.error(`[FourMeme] API error: ${response.status}`);
+        console.error(`[FourMeme] DexScreener API error: ${response.status}`);
         return [];
       }
 
-      const json = await response.json() as FourMemeApiResponse;
+      const profiles = await response.json() as Array<{
+        url: string;
+        chainId: string;
+        tokenAddress: string;
+        icon?: string;
+        header?: string;
+        description?: string;
+        links?: Array<{ type: string; url: string }>;
+      }>;
       
-      // Handle different response formats
-      let tokens: FourMemeToken[] = [];
-      if (Array.isArray(json.data)) {
-        tokens = json.data;
-      } else if (json.data && 'list' in json.data) {
-        tokens = json.data.list || [];
-      }
+      // Filter to BSC tokens only
+      const bscProfiles = profiles
+        .filter(p => p.chainId === 'bsc')
+        .slice(0, tokensLimit);
 
       this.lastFetchTime = Date.now();
+
+      // Convert to our format - we need to fetch additional data for each token
+      const tokens: LaunchpadToken[] = [];
+      
+      for (const profile of bscProfiles.slice(0, 20)) {
+        try {
+          const tokenData = await this.fetchTokenFromDexScreener(profile.tokenAddress);
+          if (tokenData) {
+            tokens.push(tokenData);
+          }
+        } catch {
+          // Skip failed tokens
+        }
+      }
       
       // Filter by minimum market cap if set
       if (this.config.minMarketCapUsd > 0) {
-        tokens = tokens.filter(t => (t.marketCap || 0) >= this.config.minMarketCapUsd);
+        return tokens.filter(t => (t.marketCap || 0) >= this.config.minMarketCapUsd);
       }
       
-      return tokens.map((token) => this.mapToken(token));
+      return tokens;
     } catch (error) {
       console.error('[FourMeme] Fetch error:', error);
       return [];
+    }
+  }
+
+  /**
+   * Fetch token data from DexScreener
+   */
+  private async fetchTokenFromDexScreener(address: string): Promise<LaunchpadToken | null> {
+    try {
+      const response = await fetch(`${DEXSCREENER_API_URL}/tokens/v1/bsc/${address}`, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'ClawFi/0.2.0',
+        },
+      });
+
+      if (!response.ok) return null;
+
+      const pairs = await response.json() as Array<{
+        chainId: string;
+        pairAddress: string;
+        baseToken: { address: string; name: string; symbol: string };
+        quoteToken: { address: string; name: string; symbol: string };
+        priceUsd: string;
+        liquidity?: { usd: number };
+        fdv?: number;
+        pairCreatedAt?: number;
+        info?: { imageUrl?: string };
+      }>;
+
+      if (!pairs || pairs.length === 0) return null;
+
+      const pair = pairs[0];
+      const isBaseToken = pair.baseToken.address.toLowerCase() === address.toLowerCase();
+      const token = isBaseToken ? pair.baseToken : pair.quoteToken;
+
+      return {
+        launchpad: 'fourmeme',
+        chain: 'bsc',
+        address: token.address,
+        symbol: token.symbol,
+        name: token.name,
+        createdAt: pair.pairCreatedAt ? new Date(pair.pairCreatedAt) : new Date(),
+        creator: '', // Not available from DexScreener
+        priceUsd: parseFloat(pair.priceUsd) || undefined,
+        marketCap: pair.fdv,
+        liquidity: pair.liquidity?.usd,
+        imageUrl: pair.info?.imageUrl,
+      };
+    } catch {
+      return null;
     }
   }
 
@@ -187,29 +255,10 @@ export class FourMemeConnector implements LaunchpadConnector {
   }
 
   /**
-   * Fetch token by address
+   * Fetch token by address using DexScreener
    */
   async fetchToken(address: string): Promise<LaunchpadToken | null> {
-    try {
-      const response = await fetch(`${FOURMEME_API_URL}/tokens/${address}`, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'ClawFi/0.2.0',
-        },
-      });
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const json = await response.json() as { data?: FourMemeToken };
-      if (!json.data) return null;
-
-      return this.mapToken(json.data);
-    } catch (error) {
-      console.error('[FourMeme] Fetch token error:', error);
-      return null;
-    }
+    return this.fetchTokenFromDexScreener(address);
   }
 
   /**
