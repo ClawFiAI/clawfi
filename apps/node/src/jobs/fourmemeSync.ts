@@ -160,15 +160,24 @@ export class FourMemeSyncJob {
           tokenSymbol: token.symbol,
           tokenName: token.name,
           launchpad: 'fourmeme',
-          creatorAddress: token.creator,
-          launchTime: token.createdAt,
-          marketCapUsd: token.marketCapUsd,
-          imageUrl: token.imageUrl,
-          metadata: token.extensions || {},
+          creatorAddress: token.creator || 'unknown', // Required field
+          txHash: `geckoterminal_${token.address}`, // Placeholder for API-sourced tokens
+          blockNumber: BigInt(0), // Placeholder for API-sourced tokens
+          blockTimestamp: token.createdAt,
+          meta: {
+            marketCapUsd: token.marketCapUsd,
+            imageUrl: token.imageUrl,
+            source: 'geckoterminal',
+            ...token.extensions,
+          },
         },
         update: {
-          marketCapUsd: token.marketCapUsd,
-          metadata: token.extensions || {},
+          meta: {
+            marketCapUsd: token.marketCapUsd,
+            imageUrl: token.imageUrl,
+            source: 'geckoterminal',
+            ...token.extensions,
+          },
           updatedAt: new Date(),
         },
       });
