@@ -6,10 +6,12 @@
  * - enable/disable strategy
  * - killswitch on/off
  * - status
+ * - AI-powered analysis and advice
  */
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { AIService, type TokenData } from '../services/ai.js';
 
 // ============================================
 // Command Schemas
@@ -31,39 +33,67 @@ interface ParsedCommand {
 }
 
 function parseCommand(input: string): ParsedCommand {
-  const parts = input.trim().toLowerCase().split(/\s+/);
-  const action = parts[0] || '';
+  const parts = input.trim().split(/\s+/);
+  const action = (parts[0] || '').toLowerCase();
   
   // Handle multi-word actions
-  if (parts[0] === 'watch' && parts.length >= 3) {
+  if (action === 'watch' && parts.length >= 3) {
     return {
-      action: `watch_${parts[1]}`, // watch_token or watch_wallet
+      action: `watch_${parts[1]?.toLowerCase()}`, // watch_token or watch_wallet
       target: parts[2],
-      args: { chain: parts[3] || 'base' },
+      args: { chain: parts[3]?.toLowerCase() || 'base' },
     };
   }
   
-  if ((parts[0] === 'enable' || parts[0] === 'disable') && parts.length >= 3) {
+  if ((action === 'enable' || action === 'disable') && parts.length >= 3) {
     return {
-      action: `${parts[0]}_${parts[1]}`, // enable_strategy or disable_strategy
+      action: `${action}_${parts[1]?.toLowerCase()}`, // enable_strategy or disable_strategy
       target: parts[2],
       args: {},
     };
   }
   
-  if (parts[0] === 'killswitch') {
+  if (action === 'killswitch') {
     return {
       action: 'killswitch',
-      target: parts[1], // 'on' or 'off'
+      target: parts[1]?.toLowerCase(), // 'on' or 'off'
       args: {},
     };
   }
   
-  if (parts[0] === 'unwatch' && parts.length >= 3) {
+  if (action === 'unwatch' && parts.length >= 3) {
     return {
-      action: `unwatch_${parts[1]}`,
+      action: `unwatch_${parts[1]?.toLowerCase()}`,
       target: parts[2],
-      args: { chain: parts[3] || 'base' },
+      args: { chain: parts[3]?.toLowerCase() || 'base' },
+    };
+  }
+
+  // AI Commands - analyze preserves case for addresses
+  if (action === 'analyze') {
+    return {
+      action: 'analyze',
+      target: parts[1], // token address - preserve case
+      args: { chain: parts[2]?.toLowerCase() || 'base' },
+    };
+  }
+
+  // AI Commands - ask combines all remaining words as the question
+  if (action === 'ask') {
+    const question = parts.slice(1).join(' ');
+    return {
+      action: 'ask',
+      target: question,
+      args: {},
+    };
+  }
+
+  // AI Commands - rate signal
+  if (action === 'rate') {
+    return {
+      action: 'rate',
+      target: parts[1], // signal ID
+      args: {},
     };
   }
   
@@ -90,6 +120,9 @@ interface CommandResult {
 // ============================================
 
 export async function registerAgentRoutes(fastify: FastifyInstance): Promise<void> {
+  // Initialize AI service
+  const aiService = new AIService(fastify.prisma);
+
   // Auth middleware
   const requireAuth = async (request: { jwtVerify: () => Promise<void> }, reply: { status: (code: number) => { send: (body: unknown) => unknown } }) => {
     try {
@@ -247,9 +280,117 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
                 'killswitch off',
                 'status',
                 'help',
+                '',
+                '--- AI Commands ---',
+                'analyze <address> [chain] - AI token analysis',
+                'ask <question> - Get AI trading advice',
+                'rate <signal_id> - Rate a signal with AI',
               ],
             },
           };
+          break;
+        
+        case 'analyze':
+          if (!parsed.target) {
+            commandResult = {
+              success: false,
+              action: 'analyze',
+              message: 'Usage: analyze <token_address> [chain]',
+            };
+          } else {
+            try {
+              const tokenData: TokenData = {
+                address: parsed.target,
+                chain: String(parsed.args.chain || 'base'),
+              };
+              const analysis = await aiService.analyzeToken(tokenData);
+              commandResult = {
+                success: true,
+                action: 'analyze',
+                message: `🤖 AI Analysis for ${analysis.symbol || parsed.target}\n\n${analysis.summary}\n\n📊 Risk Score: ${analysis.riskScore}/100\n📈 Sentiment: ${analysis.sentiment}\n💡 Recommendation: ${analysis.recommendation.toUpperCase()}\n🎯 Confidence: ${analysis.confidence}%`,
+                data: analysis,
+              };
+            } catch (err) {
+              commandResult = {
+                success: false,
+                action: 'analyze',
+                message: err instanceof Error ? err.message : 'AI analysis failed',
+              };
+            }
+          }
+          break;
+        
+        case 'ask':
+          if (!parsed.target) {
+            commandResult = {
+              success: false,
+              action: 'ask',
+              message: 'Usage: ask <your question>',
+            };
+          } else {
+            try {
+              // Reconstruct the full question from remaining parts
+              const question = [parsed.target, ...Object.values(parsed.args).map(String)].join(' ');
+              const advice = await aiService.getAdvice(question);
+              commandResult = {
+                success: true,
+                action: 'ask',
+                message: `🤖 ${advice.answer}\n\n⚠️ ${advice.disclaimers.join(' ')}`,
+                data: { relatedTokens: advice.relatedTokens },
+              };
+            } catch (err) {
+              commandResult = {
+                success: false,
+                action: 'ask',
+                message: err instanceof Error ? err.message : 'AI advice failed',
+              };
+            }
+          }
+          break;
+        
+        case 'rate':
+          if (!parsed.target) {
+            commandResult = {
+              success: false,
+              action: 'rate',
+              message: 'Usage: rate <signal_id>',
+            };
+          } else {
+            try {
+              const signal = await fastify.prisma.signal.findUnique({
+                where: { id: parsed.target },
+              });
+              if (!signal) {
+                commandResult = {
+                  success: false,
+                  action: 'rate',
+                  message: `Signal not found: ${parsed.target}`,
+                };
+              } else {
+                const rating = await aiService.rateSignal({
+                  id: signal.id,
+                  signalType: signal.signalType,
+                  severity: signal.severity,
+                  message: signal.message,
+                  tokenAddress: signal.tokenAddress ?? undefined,
+                  tokenSymbol: signal.tokenSymbol ?? undefined,
+                  chain: signal.chain ?? undefined,
+                });
+                commandResult = {
+                  success: true,
+                  action: 'rate',
+                  message: `🤖 Signal Rating\n\n📊 Importance: ${rating.importance}/10\n⚡ Action Required: ${rating.actionRequired ? 'YES' : 'No'}\n\n💭 ${rating.reasoning}\n\n💡 Suggested: ${rating.suggestedAction}`,
+                  data: rating,
+                };
+              }
+            } catch (err) {
+              commandResult = {
+                success: false,
+                action: 'rate',
+                message: err instanceof Error ? err.message : 'AI rating failed',
+              };
+            }
+          }
           break;
         
         default:
@@ -338,6 +479,315 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
         createdAt: w.createdAt.getTime(),
       })),
     };
+  });
+
+  // ============================================
+  // AI-Powered Routes
+  // ============================================
+
+  /**
+   * GET /agent/ai/status
+   * Check if AI service is available
+   */
+  fastify.get('/agent/ai/status', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    return {
+      success: true,
+      data: {
+        available: aiService.isAvailable(),
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      },
+    };
+  });
+
+  /**
+   * POST /agent/ai/analyze
+   * AI-powered token analysis
+   */
+  fastify.post('/agent/ai/analyze', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const schema = z.object({
+      address: z.string().min(1),
+      chain: z.string().default('base'),
+      symbol: z.string().optional(),
+      name: z.string().optional(),
+      price: z.number().optional(),
+      priceChange24h: z.number().optional(),
+      volume24h: z.number().optional(),
+      marketCap: z.number().optional(),
+      liquidity: z.number().optional(),
+      holders: z.number().optional(),
+    });
+
+    const result = schema.safeParse(request.body);
+    if (!result.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request body',
+          details: result.error.format(),
+        },
+      });
+    }
+
+    try {
+      const tokenData: TokenData = {
+        address: result.data.address,
+        chain: result.data.chain,
+        symbol: result.data.symbol,
+        name: result.data.name,
+        price: result.data.price,
+        priceChange24h: result.data.priceChange24h,
+        volume24h: result.data.volume24h,
+        marketCap: result.data.marketCap,
+        liquidity: result.data.liquidity,
+        holders: result.data.holders,
+      };
+
+      const analysis = await aiService.analyzeToken(tokenData);
+
+      await fastify.auditService.log({
+        action: 'agent_command',
+        userId: request.user.userId,
+        details: {
+          command: 'ai_analyze',
+          token: result.data.address,
+          chain: result.data.chain,
+        },
+        success: true,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return {
+        success: true,
+        data: analysis,
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'AI_ERROR',
+          message: error instanceof Error ? error.message : 'AI analysis failed',
+        },
+      });
+    }
+  });
+
+  /**
+   * POST /agent/ai/rate
+   * AI-powered signal rating
+   */
+  fastify.post('/agent/ai/rate', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const schema = z.object({
+      signalId: z.string().min(1),
+    });
+
+    const result = schema.safeParse(request.body);
+    if (!result.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request body',
+          details: result.error.format(),
+        },
+      });
+    }
+
+    try {
+      // Fetch the signal from database
+      const signal = await fastify.prisma.signal.findUnique({
+        where: { id: result.data.signalId },
+      });
+
+      if (!signal) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Signal not found' },
+        });
+      }
+
+      const rating = await aiService.rateSignal({
+        id: signal.id,
+        signalType: signal.signalType,
+        severity: signal.severity,
+        message: signal.message,
+        tokenAddress: signal.tokenAddress ?? undefined,
+        tokenSymbol: signal.tokenSymbol ?? undefined,
+        chain: signal.chain ?? undefined,
+      });
+
+      return {
+        success: true,
+        data: rating,
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'AI_ERROR',
+          message: error instanceof Error ? error.message : 'AI rating failed',
+        },
+      });
+    }
+  });
+
+  /**
+   * POST /agent/ai/ask
+   * Get AI trading advice
+   */
+  fastify.post('/agent/ai/ask', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const schema = z.object({
+      question: z.string().min(1).max(500),
+    });
+
+    const result = schema.safeParse(request.body);
+    if (!result.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request body',
+          details: result.error.format(),
+        },
+      });
+    }
+
+    try {
+      const advice = await aiService.getAdvice(result.data.question);
+
+      await fastify.auditService.log({
+        action: 'agent_command',
+        userId: request.user.userId,
+        details: {
+          command: 'ai_ask',
+          question: result.data.question.substring(0, 100),
+        },
+        success: true,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return {
+        success: true,
+        data: advice,
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'AI_ERROR',
+          message: error instanceof Error ? error.message : 'AI advice failed',
+        },
+      });
+    }
+  });
+
+  /**
+   * POST /agent/ai/chat
+   * Natural language command processing
+   */
+  fastify.post('/agent/ai/chat', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const schema = z.object({
+      message: z.string().min(1).max(500),
+    });
+
+    const result = schema.safeParse(request.body);
+    if (!result.success) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request body',
+          details: result.error.format(),
+        },
+      });
+    }
+
+    try {
+      const parsed = await aiService.processNaturalLanguage(result.data.message);
+
+      // Handle the intent
+      let actionResult: CommandResult | null = null;
+
+      if (parsed.intent === 'analyze_token' && parsed.entities.address) {
+        // Trigger token analysis
+        const tokenData: TokenData = {
+          address: parsed.entities.address,
+          chain: parsed.entities.chain || 'base',
+          symbol: parsed.entities.symbol,
+        };
+        const analysis = await aiService.analyzeToken(tokenData);
+        actionResult = {
+          success: true,
+          action: 'analyze_token',
+          message: `${analysis.summary}\n\nRisk Score: ${analysis.riskScore}/100 | Sentiment: ${analysis.sentiment} | Recommendation: ${analysis.recommendation}`,
+          data: analysis,
+        };
+      } else if (parsed.intent === 'watch_token' && parsed.entities.address) {
+        actionResult = await handleWatchToken(fastify, parsed.entities.address, {
+          chain: parsed.entities.chain || 'base',
+        });
+      } else if (parsed.intent === 'get_advice') {
+        const advice = await aiService.getAdvice(result.data.message);
+        actionResult = {
+          success: true,
+          action: 'get_advice',
+          message: advice.answer,
+          data: { disclaimers: advice.disclaimers, relatedTokens: advice.relatedTokens },
+        };
+      } else if (parsed.intent === 'market_overview' || parsed.intent === 'portfolio_status') {
+        actionResult = await handleStatus(fastify);
+      } else {
+        actionResult = {
+          success: true,
+          action: 'chat',
+          message: parsed.response,
+          data: { intent: parsed.intent, entities: parsed.entities },
+        };
+      }
+
+      await fastify.auditService.log({
+        action: 'agent_command',
+        userId: request.user.userId,
+        details: {
+          command: 'ai_chat',
+          message: result.data.message.substring(0, 100),
+          intent: parsed.intent,
+        },
+        success: true,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return {
+        success: true,
+        data: actionResult,
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'AI_ERROR',
+          message: error instanceof Error ? error.message : 'AI chat failed',
+        },
+      });
+    }
   });
 }
 

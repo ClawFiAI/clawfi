@@ -1,0 +1,407 @@
+/**
+ * AI Service - OpenAI GPT Integration
+ * 
+ * Provides AI-powered analysis for:
+ * - Token analysis and risk assessment
+ * - Signal rating and prioritization
+ * - Trading advice and recommendations
+ */
+
+import OpenAI from 'openai';
+import type { PrismaClient } from '@prisma/client';
+
+// ============================================
+// Types
+// ============================================
+
+export interface TokenAnalysis {
+  symbol: string;
+  address: string;
+  chain: string;
+  riskScore: number; // 1-100, higher = riskier
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendation: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell';
+  confidence: number; // 0-100
+}
+
+export interface SignalRating {
+  signalId: string;
+  importance: number; // 1-10
+  actionRequired: boolean;
+  reasoning: string;
+  suggestedAction: string;
+}
+
+export interface TradingAdvice {
+  question: string;
+  answer: string;
+  disclaimers: string[];
+  relatedTokens?: string[];
+}
+
+export interface TokenData {
+  address: string;
+  symbol?: string;
+  name?: string;
+  chain: string;
+  price?: number;
+  priceChange24h?: number;
+  volume24h?: number;
+  marketCap?: number;
+  holders?: number;
+  liquidity?: number;
+  signals?: Array<{
+    type: string;
+    severity: string;
+    message: string;
+    ts: Date;
+  }>;
+}
+
+// ============================================
+// AI Service
+// ============================================
+
+export class AIService {
+  private openai: OpenAI | null = null;
+  private model: string;
+  private prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    this.prisma = prisma;
+    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (apiKey && apiKey !== 'sk-your-openai-api-key-here') {
+      this.openai = new OpenAI({ apiKey });
+      console.log('🤖 AI Service initialized with OpenAI');
+    } else {
+      console.warn('⚠️ AI Service: OPENAI_API_KEY not configured');
+    }
+  }
+
+  /**
+   * Check if AI is available
+   */
+  isAvailable(): boolean {
+    return this.openai !== null;
+  }
+
+  /**
+   * Analyze a token and provide risk assessment
+   */
+  async analyzeToken(tokenData: TokenData): Promise<TokenAnalysis> {
+    if (!this.openai) {
+      throw new Error('AI service not configured. Set OPENAI_API_KEY in environment.');
+    }
+
+    // Fetch recent signals for this token
+    const signals = await this.prisma.signal.findMany({
+      where: {
+        tokenAddress: tokenData.address.toLowerCase(),
+      },
+      orderBy: { ts: 'desc' },
+      take: 10,
+    });
+
+    const signalsSummary = signals.map(s => ({
+      type: s.signalType,
+      severity: s.severity,
+      message: s.message,
+      ts: s.ts,
+    }));
+
+    const prompt = `You are a crypto trading analyst AI for ClawFi, a DeFi intelligence platform. Analyze this token and provide a structured assessment.
+
+TOKEN DATA:
+- Address: ${tokenData.address}
+- Symbol: ${tokenData.symbol || 'Unknown'}
+- Name: ${tokenData.name || 'Unknown'}
+- Chain: ${tokenData.chain}
+- Current Price: $${tokenData.price?.toFixed(8) || 'Unknown'}
+- 24h Price Change: ${tokenData.priceChange24h?.toFixed(2) || 'Unknown'}%
+- 24h Volume: $${tokenData.volume24h?.toLocaleString() || 'Unknown'}
+- Market Cap: $${tokenData.marketCap?.toLocaleString() || 'Unknown'}
+- Holders: ${tokenData.holders?.toLocaleString() || 'Unknown'}
+- Liquidity: $${tokenData.liquidity?.toLocaleString() || 'Unknown'}
+
+RECENT SIGNALS (from ClawFi analysis):
+${signalsSummary.length > 0 ? signalsSummary.map(s => `- [${s.severity.toUpperCase()}] ${s.type}: ${s.message}`).join('\n') : 'No signals detected'}
+
+Provide your analysis in the following JSON format ONLY (no markdown, no explanation):
+{
+  "riskScore": <number 1-100, higher = riskier>,
+  "sentiment": "<bullish|bearish|neutral>",
+  "summary": "<2-3 sentence summary>",
+  "strengths": ["<strength 1>", "<strength 2>", ...],
+  "weaknesses": ["<weakness 1>", "<weakness 2>", ...],
+  "recommendation": "<strong_buy|buy|hold|sell|strong_sell>",
+  "confidence": <number 0-100>
+}`;
+
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      messages: [
+        { role: 'system', content: 'You are a professional crypto analyst. Always respond with valid JSON only, no markdown formatting.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    
+    try {
+      // Remove potential markdown code blocks
+      const jsonContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const analysis = JSON.parse(jsonContent);
+      
+      return {
+        symbol: tokenData.symbol || 'UNKNOWN',
+        address: tokenData.address,
+        chain: tokenData.chain,
+        riskScore: analysis.riskScore || 50,
+        sentiment: analysis.sentiment || 'neutral',
+        summary: analysis.summary || 'Unable to analyze token.',
+        strengths: analysis.strengths || [],
+        weaknesses: analysis.weaknesses || [],
+        recommendation: analysis.recommendation || 'hold',
+        confidence: analysis.confidence || 50,
+      };
+    } catch {
+      throw new Error('Failed to parse AI response');
+    }
+  }
+
+  /**
+   * Rate a signal for importance and urgency
+   */
+  async rateSignal(signal: {
+    id: string;
+    signalType: string;
+    severity: string;
+    message: string;
+    tokenAddress?: string;
+    tokenSymbol?: string;
+    chain?: string;
+  }): Promise<SignalRating> {
+    if (!this.openai) {
+      throw new Error('AI service not configured. Set OPENAI_API_KEY in environment.');
+    }
+
+    const prompt = `You are a crypto trading signal analyst. Rate this signal for a trader.
+
+SIGNAL:
+- Type: ${signal.signalType}
+- Severity: ${signal.severity}
+- Message: ${signal.message}
+- Token: ${signal.tokenSymbol || signal.tokenAddress || 'N/A'}
+- Chain: ${signal.chain || 'N/A'}
+
+Rate this signal in the following JSON format ONLY:
+{
+  "importance": <number 1-10>,
+  "actionRequired": <boolean>,
+  "reasoning": "<why this rating>",
+  "suggestedAction": "<what the trader should do>"
+}`;
+
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      messages: [
+        { role: 'system', content: 'You are a professional crypto signal analyst. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.5,
+      max_tokens: 300,
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    
+    try {
+      const jsonContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const rating = JSON.parse(jsonContent);
+      
+      return {
+        signalId: signal.id,
+        importance: rating.importance || 5,
+        actionRequired: rating.actionRequired || false,
+        reasoning: rating.reasoning || 'Unable to rate signal.',
+        suggestedAction: rating.suggestedAction || 'Monitor the situation.',
+      };
+    } catch {
+      throw new Error('Failed to parse AI response');
+    }
+  }
+
+  /**
+   * Get trading advice for a question
+   */
+  async getAdvice(question: string, context?: {
+    watchedTokens?: string[];
+    recentSignals?: Array<{ type: string; message: string }>;
+  }): Promise<TradingAdvice> {
+    if (!this.openai) {
+      throw new Error('AI service not configured. Set OPENAI_API_KEY in environment.');
+    }
+
+    // Get some context from the database
+    const [recentSignals, watchedTokens] = await Promise.all([
+      this.prisma.signal.findMany({
+        orderBy: { ts: 'desc' },
+        take: 5,
+        select: { signalType: true, message: true, tokenSymbol: true, severity: true },
+      }),
+      this.prisma.watchedToken.findMany({
+        where: { enabled: true },
+        take: 10,
+        select: { tokenSymbol: true, tokenAddress: true, chain: true },
+      }),
+    ]);
+
+    const contextStr = `
+CURRENT CONTEXT:
+- Watched Tokens: ${watchedTokens.map(t => t.tokenSymbol || t.tokenAddress).join(', ') || 'None'}
+- Recent Signals: ${recentSignals.map(s => `[${s.severity}] ${s.signalType}: ${s.message}`).join('; ') || 'None'}
+${context?.watchedTokens ? `- User Portfolio: ${context.watchedTokens.join(', ')}` : ''}
+`;
+
+    const prompt = `You are ClawFi AI, a crypto trading advisor. You help users make informed decisions about DeFi trading on chains like Base, Solana, and Ethereum.
+
+${contextStr}
+
+USER QUESTION: ${question}
+
+Provide helpful, actionable advice. Be direct and practical. Always include appropriate risk disclaimers.
+
+Respond in the following JSON format ONLY:
+{
+  "answer": "<your advice, 2-4 sentences>",
+  "disclaimers": ["<disclaimer 1>", "<disclaimer 2>"],
+  "relatedTokens": ["<relevant token if any>"]
+}`;
+
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      messages: [
+        { role: 'system', content: 'You are ClawFi AI, a helpful and knowledgeable crypto trading advisor. Always respond with valid JSON only. Be practical and include risk warnings.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    
+    try {
+      const jsonContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const advice = JSON.parse(jsonContent);
+      
+      return {
+        question,
+        answer: advice.answer || 'Unable to provide advice at this time.',
+        disclaimers: advice.disclaimers || ['Not financial advice. Always do your own research.'],
+        relatedTokens: advice.relatedTokens || [],
+      };
+    } catch {
+      throw new Error('Failed to parse AI response');
+    }
+  }
+
+  /**
+   * Batch analyze multiple tokens
+   */
+  async analyzeMultipleTokens(tokens: TokenData[]): Promise<TokenAnalysis[]> {
+    const results: TokenAnalysis[] = [];
+    
+    // Process in batches of 3 to avoid rate limits
+    for (let i = 0; i < tokens.length; i += 3) {
+      const batch = tokens.slice(i, i + 3);
+      const analyses = await Promise.all(
+        batch.map(token => this.analyzeToken(token).catch(err => ({
+          symbol: token.symbol || 'UNKNOWN',
+          address: token.address,
+          chain: token.chain,
+          riskScore: 50,
+          sentiment: 'neutral' as const,
+          summary: `Analysis failed: ${err.message}`,
+          strengths: [],
+          weaknesses: [],
+          recommendation: 'hold' as const,
+          confidence: 0,
+        })))
+      );
+      results.push(...analyses);
+      
+      // Small delay between batches
+      if (i + 3 < tokens.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Process natural language command
+   */
+  async processNaturalLanguage(input: string): Promise<{
+    intent: string;
+    entities: Record<string, string>;
+    response: string;
+  }> {
+    if (!this.openai) {
+      throw new Error('AI service not configured. Set OPENAI_API_KEY in environment.');
+    }
+
+    const prompt = `You are ClawFi's command interpreter. Parse the user's natural language input into a structured command.
+
+Available intents:
+- analyze_token: Analyze a specific token (needs: address or symbol, chain)
+- watch_token: Add token to watchlist (needs: address, chain)
+- unwatch_token: Remove token from watchlist (needs: address, chain)
+- get_advice: General trading question
+- market_overview: Get market summary
+- portfolio_status: Check watched tokens
+- unknown: Can't understand
+
+USER INPUT: "${input}"
+
+Respond in JSON format ONLY:
+{
+  "intent": "<intent_name>",
+  "entities": {
+    "address": "<if mentioned>",
+    "symbol": "<if mentioned>",
+    "chain": "<if mentioned, default: base>"
+  },
+  "response": "<natural language response to confirm understanding>"
+}`;
+
+    const response = await this.openai.chat.completions.create({
+      model: this.model,
+      messages: [
+        { role: 'system', content: 'You are a command parser. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 200,
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    
+    try {
+      const jsonContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      return JSON.parse(jsonContent);
+    } catch {
+      return {
+        intent: 'unknown',
+        entities: {},
+        response: 'I could not understand that command. Try "help" for available commands.',
+      };
+    }
+  }
+}

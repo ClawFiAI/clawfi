@@ -158,6 +158,40 @@ export const api = {
 	// Watched items
 	getWatchedTokens: () => fetchAPI<WatchedToken[]>('/agent/watched/tokens'),
 	getWatchedWallets: () => fetchAPI<WatchedWallet[]>('/agent/watched/wallets'),
+
+	// AI Features
+	getAIStatus: () => fetchAPI<{ data: { available: boolean; model: string } }>('/agent/ai/status'),
+	
+	analyzeToken: (params: {
+		address: string;
+		chain?: string;
+		symbol?: string;
+		name?: string;
+		price?: number;
+		priceChange24h?: number;
+		volume24h?: number;
+		marketCap?: number;
+		liquidity?: number;
+		holders?: number;
+	}) => fetchAPI<{ data: TokenAnalysis }>('/agent/ai/analyze', {
+		method: 'POST',
+		body: JSON.stringify(params),
+	}),
+
+	rateSignal: (signalId: string) => fetchAPI<{ data: SignalRating }>('/agent/ai/rate', {
+		method: 'POST',
+		body: JSON.stringify({ signalId }),
+	}),
+
+	askAI: (question: string) => fetchAPI<{ data: TradingAdvice }>('/agent/ai/ask', {
+		method: 'POST',
+		body: JSON.stringify({ question }),
+	}),
+
+	chatAI: (message: string) => fetchAPI<{ data: CommandResult }>('/agent/ai/chat', {
+		method: 'POST',
+		body: JSON.stringify({ message }),
+	}),
 };
 
 // Types
@@ -334,6 +368,35 @@ export interface AuditParams {
 	success?: string;
 	page?: string;
 	limit?: string;
+}
+
+// AI Types
+export interface TokenAnalysis {
+	symbol: string;
+	address: string;
+	chain: string;
+	riskScore: number;
+	sentiment: 'bullish' | 'bearish' | 'neutral';
+	summary: string;
+	strengths: string[];
+	weaknesses: string[];
+	recommendation: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell';
+	confidence: number;
+}
+
+export interface SignalRating {
+	signalId: string;
+	importance: number;
+	actionRequired: boolean;
+	reasoning: string;
+	suggestedAction: string;
+}
+
+export interface TradingAdvice {
+	question: string;
+	answer: string;
+	disclaimers: string[];
+	relatedTokens?: string[];
 }
 
 // Format helpers
