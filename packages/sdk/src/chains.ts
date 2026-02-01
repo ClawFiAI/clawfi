@@ -169,11 +169,10 @@ export function getEVMChains(): ChainId[] {
  */
 export function getTokenExplorerUrl(address: string, chain: ChainId): string {
   const config = CHAINS[chain];
-  if (!config || !config.blockExplorers.length) {
+  const explorer = config?.blockExplorers?.[0];
+  if (!explorer) {
     return '';
   }
-  
-  const explorer = config.blockExplorers[0];
   
   if (chain === 'solana') {
     return `${explorer.url}/token/${address}`;
@@ -187,11 +186,10 @@ export function getTokenExplorerUrl(address: string, chain: ChainId): string {
  */
 export function getWalletExplorerUrl(address: string, chain: ChainId): string {
   const config = CHAINS[chain];
-  if (!config || !config.blockExplorers.length) {
+  const explorer = config?.blockExplorers?.[0];
+  if (!explorer) {
     return '';
   }
-  
-  const explorer = config.blockExplorers[0];
   
   if (chain === 'solana') {
     return `${explorer.url}/account/${address}`;
@@ -205,11 +203,11 @@ export function getWalletExplorerUrl(address: string, chain: ChainId): string {
  */
 export function getTxExplorerUrl(txHash: string, chain: ChainId): string {
   const config = CHAINS[chain];
-  if (!config || !config.blockExplorers.length) {
+  const explorer = config?.blockExplorers?.[0];
+  if (!explorer) {
     return '';
   }
   
-  const explorer = config.blockExplorers[0];
   return `${explorer.url}/tx/${txHash}`;
 }
 
