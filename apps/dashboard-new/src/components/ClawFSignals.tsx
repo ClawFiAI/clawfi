@@ -157,7 +157,7 @@ export default function ClawFSignals() {
 			{/* Header */}
 			<div className="flex items-center justify-between">
 				<div className="flex items-center gap-3">
-					<span className="text-2xl">🦀</span>
+					<img src="/logo-square.png" alt="ClawFi" className="w-8 h-8 rounded-lg" />
 					<div>
 						<h2 className="text-lg font-semibold text-white">ClawF Buy Signals</h2>
 						<p className="text-sm text-gray-400">
