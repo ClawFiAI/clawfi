@@ -1,41 +1,32 @@
 ---
 import LayoutSidebar from '../app/LayoutSidebar.astro';
-import SignalsList from '../components/SignalsList';
+import ClawFSignals from '../components/ClawFSignals';
 ---
 
 <LayoutSidebar>
 	<div class="space-y-6">
-		<!-- Header -->
-		<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-			<div>
-				<h1 class="text-2xl font-bold text-white">Signals</h1>
-				<p class="text-gray-400">Intelligence alerts from your strategies</p>
+		<!-- Hero Banner -->
+		<div class="bg-gradient-to-r from-primary-900/50 to-purple-900/50 rounded-2xl border border-primary-700/30 p-6">
+			<div class="flex items-center gap-4">
+				<div class="text-5xl">🦀</div>
+				<div>
+					<h1 class="text-2xl font-bold text-white">ClawF Buy Signals</h1>
+					<p class="text-gray-300">Real-time moonshot detection powered by on-chain intelligence</p>
+				</div>
 			</div>
-			<div class="flex items-center gap-3">
-				<select
-					id="filter-severity"
-					class="px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:ring-primary-500 focus:border-primary-500"
-				>
-					<option value="">All Severities</option>
-					<option value="critical">Critical</option>
-					<option value="high">High</option>
-					<option value="medium">Medium</option>
-					<option value="low">Low</option>
-					<option value="info">Info</option>
-				</select>
-				<select
-					id="filter-acknowledged"
-					class="px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:ring-primary-500 focus:border-primary-500"
-				>
-					<option value="">All Status</option>
-					<option value="false">Unacknowledged</option>
-					<option value="true">Acknowledged</option>
-				</select>
+			<div class="mt-4 flex flex-wrap gap-4 text-sm">
+				<div class="flex items-center gap-2 text-gray-300">
+					<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+					Live scanning active
+				</div>
+				<div class="text-gray-400">
+					Analyzing: Volume spikes • Buy pressure • Price momentum • Liquidity health • Rug flags
+				</div>
 			</div>
 		</div>
 
-		<!-- Signals List -->
-		<SignalsList client:load />
+		<!-- ClawF Signals -->
+		<ClawFSignals client:load />
 	</div>
 </LayoutSidebar>
 
