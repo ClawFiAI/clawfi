@@ -142,6 +142,366 @@ export class DiscoveryEngine {
   }
 
   /**
+   * 100X GEM HUNTER - Specialized scan for ultra-early tokens with 100x potential
+   * Focuses on: ultra-low mcap, fresh launches, viral activity, strong buy pressure
+   */
+  async scanGems(options?: {
+    chains?: SupportedChain[];
+    limit?: number;
+  }): Promise<DiscoveryResult[]> {
+    const chains = options?.chains || ['solana', 'base'];
+    const limit = options?.limit || 15;
+    const results: DiscoveryResult[] = [];
+
+    // Fetch fresh pools specifically
+    const freshPools = await this.fetchFreshPools(chains);
+    
+    // Also get trending for comparison
+    const trending = await this.fetchTrending();
+    
+    // Combine with priority on fresh pools
+    const allTokens = this.deduplicateTokens([...freshPools, ...trending]);
+
+    // Evaluate with GEM HUNTER criteria
+    for (const token of allTokens) {
+      if (chains.length > 0 && !chains.includes(token.chain)) continue;
+      
+      const result = await this.evaluateGemCandidate(token);
+      if (result.qualifies) {
+        results.push(result);
+      }
+    }
+
+    // Sort by GEM score (modified composite)
+    return results
+      .sort((a, b) => b.candidate.scores.composite - a.candidate.scores.composite)
+      .slice(0, limit);
+  }
+
+  /**
+   * Fetch ultra-fresh pools (< 2 hours old)
+   */
+  private async fetchFreshPools(chains: SupportedChain[]): Promise<Partial<TokenCandidate>[]> {
+    const results: Partial<TokenCandidate>[] = [];
+    
+    for (const chain of chains) {
+      try {
+        const chainId = chain === 'solana' ? 'solana' : chain;
+        const url = `${GECKOTERMINAL_API}/networks/${chainId}/new_pools?page=1`;
+        const data = await fetchWithCache<{ data: Array<{ attributes: Record<string, unknown>; id: string }> }>(
+          url, 
+          `fresh_pools_${chain}`, 
+          15000 // 15 second cache for fresh data
+        );
+        
+        if (data?.data) {
+          for (const pool of data.data) {
+            const attrs = pool.attributes;
+            const pairAddress = pool.id?.split('_')[1] || '';
+            
+            // Calculate age in hours
+            const createdAt = attrs.pool_created_at as string;
+            const ageHours = createdAt 
+              ? (Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60)
+              : 999;
+            
+            // Only include tokens < 6 hours old
+            if (ageHours > 6) continue;
+            
+            const fdv = parseFloat(attrs.fdv_usd as string) || 0;
+            const reserve = parseFloat(attrs.reserve_in_usd as string) || 0;
+            const vol24h = parseFloat((attrs.volume_usd as Record<string, string>)?.h24) || 0;
+            const h1Change = parseFloat((attrs.price_change_percentage as Record<string, string>)?.h1) || 0;
+            const h24Change = parseFloat((attrs.price_change_percentage as Record<string, string>)?.h24) || 0;
+            const txns = attrs.transactions as Record<string, Record<string, number>> || {};
+            const buys = txns.h24?.buys || 0;
+            const sells = txns.h24?.sells || 0;
+            
+            results.push({
+              address: pairAddress,
+              symbol: (attrs.name as string)?.split(' / ')[0] || 'UNKNOWN',
+              name: attrs.name as string,
+              chain,
+              priceUsd: parseFloat(attrs.base_token_price_usd as string) || 0,
+              priceChange1h: h1Change,
+              priceChange6h: 0,
+              priceChange24h: h24Change,
+              volume24h: vol24h,
+              liquidity: reserve,
+              fdv: fdv > 0 ? fdv : reserve * 2, // Estimate if not available
+              buys24h: buys,
+              sells24h: sells,
+              uniqueBuyers24h: buys,
+              uniqueSellers24h: sells,
+              pairCreatedAt: createdAt,
+            });
+          }
+        }
+      } catch (e) {
+        console.error(`Error fetching fresh pools for ${chain}:`, e);
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Evaluate token specifically for 100x GEM potential
+   * Different criteria than regular scan - focused on ultra-early, ultra-low mcap
+   */
+  private async evaluateGemCandidate(token: Partial<TokenCandidate>): Promise<DiscoveryResult> {
+    const conditions: DiscoveryCondition[] = [];
+    const candidate = this.normalizeToken(token);
+    
+    const totalTxns = candidate.buys24h + candidate.sells24h;
+    const buyRatio = totalTxns > 0 ? candidate.buys24h / totalTxns : 0;
+    const volumeToMcap = candidate.fdv > 0 ? candidate.volume24h / candidate.fdv : 0;
+    const liqRatio = candidate.fdv > 0 ? (candidate.liquidity / candidate.fdv) * 100 : 0;
+    
+    // Token age in hours
+    const ageHours = candidate.pairCreatedAt 
+      ? (Date.now() - new Date(candidate.pairCreatedAt).getTime()) / (1000 * 60 * 60)
+      : 999;
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEM HUNTER CONDITIONS - Optimized for 100x potential
+    // ═══════════════════════════════════════════════════════════════
+
+    // CONDITION 1: ULTRA FRESH (< 2 hours = highest potential)
+    const isUltraFresh = ageHours < 2;
+    conditions.push({
+      name: 'Ultra Fresh Launch',
+      passed: isUltraFresh,
+      value: ageHours < 999 ? `${ageHours.toFixed(1)}h old` : 'Unknown',
+      threshold: '< 2 hours',
+      evidence: isUltraFresh 
+        ? `🆕 BRAND NEW: ${ageHours.toFixed(1)}h old - first mover opportunity!`
+        : ageHours < 6 ? `${ageHours.toFixed(0)}h old - still early` : 'Mature token',
+    });
+
+    // CONDITION 2: ULTRA LOW MCAP (< $50K = 100x to $5M possible)
+    const isUltraLowMcap = candidate.fdv < 50000 && candidate.fdv > 1000;
+    conditions.push({
+      name: 'Ultra Low MCap',
+      passed: isUltraLowMcap,
+      value: candidate.fdv,
+      threshold: '$1K - $50K',
+      evidence: isUltraLowMcap
+        ? `💎 GEM: $${(candidate.fdv / 1000).toFixed(1)}K mcap - 100x to $${(candidate.fdv * 100 / 1000000).toFixed(1)}M`
+        : `$${(candidate.fdv / 1000).toFixed(0)}K mcap`,
+    });
+
+    // CONDITION 3: STRONG BUY PRESSURE (> 65% = high conviction)
+    const hasStrongBuying = buyRatio > 0.65;
+    conditions.push({
+      name: 'Strong Buy Pressure',
+      passed: hasStrongBuying,
+      value: `${(buyRatio * 100).toFixed(0)}% buys`,
+      threshold: '> 65%',
+      evidence: hasStrongBuying
+        ? `🔥 HIGH CONVICTION: ${(buyRatio * 100).toFixed(0)}% buy ratio`
+        : `${(buyRatio * 100).toFixed(0)}% buy ratio`,
+    });
+
+    // CONDITION 4: VIRAL ACTIVITY (many txns early = discovery happening)
+    const hasViralActivity = totalTxns > 50 && ageHours < 3;
+    conditions.push({
+      name: 'Viral Activity',
+      passed: hasViralActivity,
+      value: totalTxns,
+      threshold: '> 50 txns in < 3h',
+      evidence: hasViralActivity
+        ? `🚀 VIRAL: ${totalTxns} transactions in ${ageHours.toFixed(1)}h - being discovered!`
+        : `${totalTxns} transactions`,
+    });
+
+    // CONDITION 5: HEALTHY LIQUIDITY RATIO (10-60% = tradeable but not locked)
+    const hasHealthyLiq = liqRatio >= 10 && liqRatio <= 60;
+    conditions.push({
+      name: 'Healthy Liquidity',
+      passed: hasHealthyLiq,
+      value: `${liqRatio.toFixed(0)}%`,
+      threshold: '10-60% liq/mcap',
+      evidence: hasHealthyLiq
+        ? `💧 Good liquidity: ${liqRatio.toFixed(0)}% of mcap`
+        : liqRatio > 60 ? 'High liq ratio' : 'Low liquidity',
+    });
+
+    // CONDITION 6: POSITIVE EARLY MOMENTUM (price up in first hour)
+    const hasEarlyMomentum = candidate.priceChange1h > 0 && ageHours < 3;
+    conditions.push({
+      name: 'Early Momentum',
+      passed: hasEarlyMomentum,
+      value: `${candidate.priceChange1h.toFixed(1)}%`,
+      threshold: '> 0% 1h change',
+      evidence: hasEarlyMomentum
+        ? `📈 Positive start: +${candidate.priceChange1h.toFixed(0)}% since launch`
+        : `${candidate.priceChange1h.toFixed(0)}% 1h change`,
+    });
+
+    // CONDITION 7: VOLUME EXPLOSION (high vol relative to mcap)
+    const hasVolumeExplosion = volumeToMcap > 0.5;
+    conditions.push({
+      name: 'Volume Explosion',
+      passed: hasVolumeExplosion,
+      value: `${(volumeToMcap * 100).toFixed(0)}%`,
+      threshold: '> 50% vol/mcap',
+      evidence: hasVolumeExplosion
+        ? `💥 EXPLOSIVE: ${(volumeToMcap * 100).toFixed(0)}% volume ratio`
+        : `${(volumeToMcap * 100).toFixed(0)}% vol/mcap`,
+    });
+
+    // Calculate GEM score
+    const { scores, signals } = this.calculateGemScores(candidate, conditions, ageHours, buyRatio, volumeToMcap);
+    candidate.scores = scores;
+    candidate.signals = signals;
+
+    const conditionsPassed = conditions.filter(c => c.passed).length;
+    const qualifies = conditionsPassed >= 4; // Need 4 of 7 conditions for GEM status
+
+    return {
+      candidate,
+      conditionsPassed,
+      conditionsTotal: conditions.length,
+      conditions,
+      qualifies,
+    };
+  }
+
+  /**
+   * Calculate scores specifically optimized for 100x GEM detection
+   */
+  private calculateGemScores(
+    token: TokenCandidate,
+    conditions: DiscoveryCondition[],
+    ageHours: number,
+    buyRatio: number,
+    volumeToMcap: number
+  ): { scores: TokenScores; signals: string[] } {
+    const signals: string[] = [];
+    let momentum = 0;
+    let gemBonus = 0;
+
+    // ═══════════════════════════════════════════════════════════════
+    // GEM SCORING - Maximized for 100x potential
+    // ═══════════════════════════════════════════════════════════════
+
+    // ULTRA FRESH BONUS (< 1h = highest potential)
+    if (ageHours < 0.5) {
+      gemBonus += 40;
+      signals.push(`🆕 ULTRA FRESH: ${(ageHours * 60).toFixed(0)} min old - FIRST MOVER!`);
+    } else if (ageHours < 1) {
+      gemBonus += 35;
+      signals.push(`🆕 BRAND NEW: ${(ageHours * 60).toFixed(0)} min old - very early`);
+    } else if (ageHours < 2) {
+      gemBonus += 25;
+      signals.push(`🌱 Fresh: ${ageHours.toFixed(1)}h old - early entry`);
+    } else if (ageHours < 6) {
+      gemBonus += 10;
+    }
+
+    // ULTRA LOW MCAP BONUS
+    if (token.fdv < 10000 && token.fdv > 1000) {
+      gemBonus += 40;
+      signals.push(`💎 ULTRA GEM: $${(token.fdv / 1000).toFixed(1)}K - 1000x potential!`);
+    } else if (token.fdv < 30000) {
+      gemBonus += 30;
+      signals.push(`💎 MICRO GEM: $${(token.fdv / 1000).toFixed(0)}K - 100x potential`);
+    } else if (token.fdv < 50000) {
+      gemBonus += 20;
+      signals.push(`🎯 Low cap: $${(token.fdv / 1000).toFixed(0)}K - 50x potential`);
+    } else if (token.fdv < 100000) {
+      gemBonus += 10;
+    }
+
+    // STRONG BUY PRESSURE BONUS
+    if (buyRatio > 0.80) {
+      momentum += 35;
+      signals.push(`🐋 WHALE BUYING: ${(buyRatio * 100).toFixed(0)}% buys - massive conviction`);
+    } else if (buyRatio > 0.70) {
+      momentum += 25;
+      signals.push(`💪 Strong buying: ${(buyRatio * 100).toFixed(0)}% buy ratio`);
+    } else if (buyRatio > 0.60) {
+      momentum += 15;
+    } else if (buyRatio < 0.45) {
+      momentum -= 20;
+      signals.push(`⚠️ Sell pressure: ${(buyRatio * 100).toFixed(0)}% buys`);
+    }
+
+    // VOLUME EXPLOSION BONUS
+    if (volumeToMcap > 5) {
+      momentum += 30;
+      signals.push(`💥 EXPLOSIVE VOLUME: ${(volumeToMcap * 100).toFixed(0)}% vol/mcap`);
+    } else if (volumeToMcap > 2) {
+      momentum += 20;
+      signals.push(`🔥 High volume: ${(volumeToMcap * 100).toFixed(0)}% vol/mcap`);
+    } else if (volumeToMcap > 0.5) {
+      momentum += 10;
+    }
+
+    // EARLY MOMENTUM
+    if (token.priceChange1h > 50 && ageHours < 2) {
+      momentum += 20;
+      signals.push(`🚀 LAUNCH PUMP: +${token.priceChange1h.toFixed(0)}%`);
+    } else if (token.priceChange1h > 20 && ageHours < 3) {
+      momentum += 15;
+      signals.push(`📈 Strong start: +${token.priceChange1h.toFixed(0)}%`);
+    } else if (token.priceChange1h > 0) {
+      momentum += 10;
+    } else if (token.priceChange1h < -20) {
+      momentum -= 15;
+      signals.push(`⛔ Launch dump: ${token.priceChange1h.toFixed(0)}%`);
+    }
+
+    // VIRAL ACTIVITY BONUS
+    const totalTxns = token.buys24h + token.sells24h;
+    if (totalTxns > 200 && ageHours < 2) {
+      momentum += 20;
+      signals.push(`🔥 VIRAL: ${totalTxns} txns in ${ageHours.toFixed(1)}h`);
+    } else if (totalTxns > 100 && ageHours < 3) {
+      momentum += 10;
+    }
+
+    // PRIME GEM SIGNAL
+    if (gemBonus >= 50 && momentum >= 30 && buyRatio > 0.60 && token.fdv < 50000 && ageHours < 2) {
+      signals.unshift(`🚨 PRIME GEM: Ultra-early, ultra-low mcap, strong buying - 100x POTENTIAL`);
+    }
+
+    // Standard scoring
+    const liquidity = Math.min(100, Math.max(0, 
+      (token.liquidity >= 10000 ? 40 : token.liquidity >= 5000 ? 30 : 20) +
+      (token.fdv > 0 && (token.liquidity / token.fdv) >= 0.1 ? 30 : 15) +
+      (volumeToMcap >= 0.5 ? 30 : 15)
+    ));
+
+    let risk = 50;
+    if (token.liquidity >= 5000) risk += 15;
+    if (buyRatio >= 0.5) risk += 15;
+    if (ageHours < 1) risk -= 10; // Very new = higher risk but higher reward
+
+    const passedCount = conditions.filter(c => c.passed).length;
+    const confidence = Math.min(100, (passedCount / conditions.length) * 50 + 30);
+
+    // Clamp scores
+    momentum = Math.max(0, Math.min(100, momentum + gemBonus));
+    risk = Math.max(0, Math.min(100, risk));
+
+    // Composite heavily weighted toward momentum for GEM hunting
+    const composite = Math.round(
+      momentum * 0.60 +  // Momentum is king for gems
+      gemBonus * 0.10 +  // Extra gem bonus
+      liquidity * 0.10 +
+      risk * 0.10 +
+      confidence * 0.10
+    );
+
+    return {
+      scores: { momentum, liquidity, risk, confidence, composite },
+      signals,
+    };
+  }
+
+  /**
    * Evaluate a token for PRE-PUMP potential (about to pump in next 4 hours)
    * Focus on ACCUMULATION signals, not tokens already pumping
    */

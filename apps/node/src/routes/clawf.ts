@@ -329,4 +329,55 @@ export default async function clawfRoutes(fastify: FastifyInstance) {
       data: { message: 'ClawF continuous radar stopped' },
     };
   });
+
+  /**
+   * GET /clawf/gems
+   * 100x GEM HUNTER - Scan for ultra-early tokens with 100x potential
+   * Focuses on: ultra-low mcap, fresh launches, viral activity, strong buy pressure
+   */
+  fastify.get('/clawf/gems', async (request, reply) => {
+    const query = RadarQuerySchema.safeParse(request.query);
+    
+    if (!query.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid query parameters' },
+      });
+    }
+
+    try {
+      const chains = query.data.chains
+        ? query.data.chains.split(',').filter(c => SUPPORTED_CHAINS.includes(c as SupportedChain)) as SupportedChain[]
+        : ['solana', 'base'] as SupportedChain[];
+
+      const results = await clawf.scanGems({
+        chains,
+        limit: query.data.limit || 15,
+      });
+
+      return {
+        success: true,
+        data: {
+          count: results.length,
+          mode: '100x GEM HUNTER',
+          description: 'Ultra-early tokens with 100x potential. Focus on ultra-low mcap, fresh launches, strong buying.',
+          gems: results.map(r => ({
+            ...r.candidate,
+            conditionsPassed: r.conditionsPassed,
+            conditionsTotal: r.conditionsTotal,
+            conditions: r.conditions,
+            qualifies: r.qualifies,
+          })),
+        },
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'GEM_HUNTER_ERROR',
+          message: error instanceof Error ? error.message : 'Gem scan failed',
+        },
+      });
+    }
+  });
 }

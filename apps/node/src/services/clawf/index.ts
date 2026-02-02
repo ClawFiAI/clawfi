@@ -160,6 +160,37 @@ export class ClawF {
     return { result, explanation };
   }
 
+  /**
+   * 100x GEM HUNTER - Scan for ultra-early tokens with 100x potential
+   * Focuses on: ultra-low mcap, fresh launches, viral activity, strong buy pressure
+   */
+  async scanGems(options?: {
+    chains?: SupportedChain[];
+    limit?: number;
+  }): Promise<DiscoveryResult[]> {
+    const chains = options?.chains || ['solana', 'base'] as SupportedChain[];
+    const limit = options?.limit || 15;
+
+    console.log(`💎 ClawF GEM HUNTER scanning ${chains.join(', ')} for 100x opportunities...`);
+
+    // Run specialized gem scan
+    const results = await this.discovery.scanGems({ chains, limit: limit * 2 });
+
+    // Detect flags for all candidates
+    for (const result of results) {
+      result.candidate.flags = this.flags.detectFlags(
+        result.candidate,
+        undefined,
+        result.candidate.socialSignals
+      );
+    }
+
+    // Filter out hard flags and return top gems
+    return results
+      .filter(r => !this.flags.hasHardFlag(r.candidate.flags))
+      .slice(0, limit);
+  }
+
   // ============================================
   // Position Tracking Commands
   // ============================================
