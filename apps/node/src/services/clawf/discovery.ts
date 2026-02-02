@@ -207,8 +207,10 @@ export class DiscoveryEngine {
     const conditionsPassed = conditions.filter(c => c.passed).length;
     const qualifies = conditionsPassed >= this.config.minConditionsToPass;
 
-    // Calculate scores
-    candidate.scores = this.calculateScores(candidate, conditions);
+    // Calculate scores and generate signals
+    const { scores, signals } = this.calculateScores(candidate, conditions);
+    candidate.scores = scores;
+    candidate.signals = signals;
 
     // Update volume baseline for future comparisons
     this.updateVolumeBaseline(candidate.address, candidate.volume24h);
@@ -228,29 +230,49 @@ export class DiscoveryEngine {
   private calculateScores(
     token: TokenCandidate,
     conditions: DiscoveryCondition[]
-  ): TokenScores {
+  ): { scores: TokenScores; signals: string[] } {
+    const signals: string[] = [];
+    
     // Momentum Score (0-100)
     let momentum = 0;
     const totalTxns = token.buys24h + token.sells24h;
     const buyRatio = totalTxns > 0 ? token.buys24h / totalTxns : 0;
     
     // Price momentum contribution
-    if (token.priceChange1h > 50) momentum += 30;
-    else if (token.priceChange1h > 20) momentum += 25;
+    if (token.priceChange1h > 50) {
+      momentum += 30;
+      signals.push(`🚀 Pumping +${token.priceChange1h.toFixed(0)}% 1h`);
+    }
+    else if (token.priceChange1h > 20) {
+      momentum += 25;
+      signals.push(`📈 Strong momentum +${token.priceChange1h.toFixed(0)}% 1h`);
+    }
     else if (token.priceChange1h > 10) momentum += 20;
     else if (token.priceChange1h > 5) momentum += 15;
     else if (token.priceChange1h > 0) momentum += 10;
 
     // Buy pressure contribution
-    if (buyRatio > 0.8) momentum += 30;
-    else if (buyRatio > 0.7) momentum += 25;
+    if (buyRatio > 0.8) {
+      momentum += 30;
+      signals.push(`🐋 Heavy accumulation (${(buyRatio * 100).toFixed(0)}% buys)`);
+    }
+    else if (buyRatio > 0.7) {
+      momentum += 25;
+      signals.push(`📊 Strong buying pressure`);
+    }
     else if (buyRatio > 0.6) momentum += 20;
     else if (buyRatio > 0.5) momentum += 15;
 
     // Volume ratio contribution
     const volumeRatio = token.fdv > 0 ? token.volume24h / token.fdv : 0;
-    if (volumeRatio > 2) momentum += 25;
-    else if (volumeRatio > 1) momentum += 20;
+    if (volumeRatio > 2) {
+      momentum += 25;
+      signals.push(`🔥 Extreme volume (${(volumeRatio * 100).toFixed(0)}% of mcap)`);
+    }
+    else if (volumeRatio > 1) {
+      momentum += 20;
+      signals.push(`📈 High volume ratio`);
+    }
     else if (volumeRatio > 0.5) momentum += 15;
     else if (volumeRatio > 0.2) momentum += 10;
 
@@ -336,7 +358,15 @@ export class DiscoveryEngine {
       confidence * 0.15
     );
 
-    return { momentum, liquidity, risk, confidence, composite };
+    // Add market cap signal
+    if (token.fdv < 100000) signals.push(`🎯 Micro cap (<$100K)`);
+    else if (token.fdv < 500000) signals.push(`🎯 Ultra low cap (<$500K)`);
+    else if (token.fdv < 1000000) signals.push(`💰 Low cap (<$1M)`);
+
+    return { 
+      scores: { momentum, liquidity, risk, confidence, composite },
+      signals 
+    };
   }
 
   /**
@@ -529,6 +559,7 @@ export class DiscoveryEngine {
       pairAddress: token.pairAddress,
       pairCreatedAt: token.pairCreatedAt,
       scores: token.scores || { momentum: 0, liquidity: 0, risk: 50, confidence: 0, composite: 0 },
+      signals: token.signals || [],
       flags: token.flags || [],
       socialSignals: token.socialSignals,
       walletIntelligence: token.walletIntelligence,

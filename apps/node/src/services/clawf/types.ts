@@ -48,6 +48,9 @@ export interface TokenCandidate {
   // Computed Scores
   scores: TokenScores;
   
+  // Signals (human-readable insights)
+  signals: string[];
+  
   // Flags
   flags: TokenFlag[];
   
