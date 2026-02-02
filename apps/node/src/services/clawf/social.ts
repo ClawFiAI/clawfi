@@ -5,6 +5,8 @@
  * Uses public post analysis only - no user profiling.
  */
 
+import { ClawFConfig, DEFAULT_CONFIG, SocialSignals } from './types.js';
+
 // X API credentials from environment
 const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN || '';
 
@@ -15,6 +17,46 @@ interface SocialSignal {
   sentiment: 'bullish' | 'bearish' | 'neutral' | 'unknown';
   lastChecked: Date;
   trendingScore: number; // 0-100
+}
+
+// ============================================
+// SocialSignalAnalyzer Class (for main ClawF integration)
+// ============================================
+
+export class SocialSignalAnalyzer {
+  private config: ClawFConfig;
+
+  constructor(config: Partial<ClawFConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Check if social analysis is available
+   */
+  isAvailable(): boolean {
+    return !!X_BEARER_TOKEN;
+  }
+
+  /**
+   * Analyze token social presence
+   */
+  async analyzeToken(address: string, symbol?: string): Promise<SocialSignals | undefined> {
+    if (!this.isAvailable()) {
+      return undefined;
+    }
+
+    const signal = await getSocialSignals(address, symbol || address);
+    if (!signal) {
+      return undefined;
+    }
+
+    return {
+      xMentions: signal.mentionCount,
+      sentiment: signal.sentiment === 'bullish' ? 0.7 : signal.sentiment === 'bearish' ? 0.3 : 0.5,
+      influencerCount: 0, // Not tracking this
+      trending: signal.spikeDetected,
+    };
+  }
 }
 
 interface CachedSocialData {
