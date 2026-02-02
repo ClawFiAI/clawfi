@@ -5,6 +5,7 @@
 ## Getting Started
 
 * [Installation](getting-started/installation.md)
+* [Raspberry Pi Setup](getting-started/raspberry-pi.md)
 * [Quick Start](getting-started/quickstart.md)
 * [Configuration](getting-started/configuration.md)
 
