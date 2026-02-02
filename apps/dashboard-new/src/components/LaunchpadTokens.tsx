@@ -259,9 +259,9 @@ export default function LaunchpadTokens() {
 												</div>
 												<div className="text-right">
 													<p className="font-medium text-white">
-														{formatClankerMarketCap(token.related?.market?.marketCap)}
+														{formatClankerMarketCap(token.related?.market?.marketCap, token.starting_market_cap)}
 													</p>
-													<p className={`text-sm ${priceChange.positive ? 'text-emerald-400' : 'text-red-400'}`}>
+													<p className={`text-sm ${priceChange.positive ? 'text-emerald-400' : priceChange.text === 'New' ? 'text-blue-400' : 'text-red-400'}`}>
 														{priceChange.text}
 													</p>
 												</div>

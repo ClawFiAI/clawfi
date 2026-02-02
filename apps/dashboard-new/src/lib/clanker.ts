@@ -229,15 +229,17 @@ export const clankerApi = {
 };
 
 // Format helpers for Clanker data
-export function formatClankerMarketCap(marketCap?: number): string {
-	if (!marketCap) return 'N/A';
-	if (marketCap >= 1_000_000) return `$${(marketCap / 1_000_000).toFixed(2)}M`;
-	if (marketCap >= 1_000) return `$${(marketCap / 1_000).toFixed(2)}K`;
-	return `$${marketCap.toFixed(2)}`;
+export function formatClankerMarketCap(marketCap?: number, startingMcap?: number): string {
+	// Use live market cap if available, otherwise show starting mcap
+	const mcap = marketCap || startingMcap;
+	if (!mcap) return 'New';
+	if (mcap >= 1_000_000) return `$${(mcap / 1_000_000).toFixed(2)}M`;
+	if (mcap >= 1_000) return `$${(mcap / 1_000).toFixed(1)}K`;
+	return `$${mcap.toFixed(0)}`;
 }
 
 export function formatClankerPrice(price?: number): string {
-	if (!price) return 'N/A';
+	if (!price) return '-';
 	if (price < 0.000001) return `$${price.toExponential(2)}`;
 	if (price < 0.01) return `$${price.toFixed(6)}`;
 	if (price < 1) return `$${price.toFixed(4)}`;
@@ -245,7 +247,7 @@ export function formatClankerPrice(price?: number): string {
 }
 
 export function formatPriceChange(change?: number): { text: string; positive: boolean } {
-	if (change === undefined || change === null) return { text: 'N/A', positive: false };
+	if (change === undefined || change === null) return { text: 'New', positive: true };
 	const isPositive = change >= 0;
 	return {
 		text: `${isPositive ? '+' : ''}${change.toFixed(2)}%`,
