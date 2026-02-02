@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../app/constants';
 
+interface GemPerformance {
+	gainSinceDetection: number;
+	peakGain: number;
+	hoursTracked: number;
+	detectedAt: string;
+}
+
 interface GemCandidate {
 	address: string;
 	symbol: string;
@@ -22,15 +29,22 @@ interface GemCandidate {
 	signals: string[];
 	conditionsPassed: number;
 	conditionsTotal: number;
+	performance?: GemPerformance | null;
+}
+
+interface GemStats {
+	totalTracked: number;
+	avgGain: number;
+	topGain: number;
+	winRate: number;
 }
 
 interface GemResponse {
 	success: boolean;
 	data: {
 		count: number;
-		mode: string;
-		description: string;
 		gems: GemCandidate[];
+		stats?: GemStats;
 	};
 }
 
@@ -49,6 +63,7 @@ function formatPrice(price: number): string {
 
 export default function GemHunter() {
 	const [gems, setGems] = useState<GemCandidate[]>([]);
+	const [stats, setStats] = useState<GemStats | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -66,6 +81,9 @@ export default function GemHunter() {
 			
 			if (data.success && data.data?.gems) {
 				setGems(data.data.gems);
+				if (data.data.stats) {
+					setStats(data.data.stats);
+				}
 				setLastUpdated(new Date());
 			} else {
 				setGems([]);
@@ -168,6 +186,32 @@ export default function GemHunter() {
 				</button>
 			</div>
 
+			{/* Performance Stats */}
+			{stats && stats.totalTracked > 0 && (
+				<div className="grid grid-cols-4 gap-3 p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
+					<div className="text-center">
+						<div className="text-xl font-bold text-white">{stats.totalTracked}</div>
+						<div className="text-xs text-gray-400">Tracked</div>
+					</div>
+					<div className="text-center">
+						<div className={`text-xl font-bold ${stats.avgGain >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+							{stats.avgGain >= 0 ? '+' : ''}{stats.avgGain}%
+						</div>
+						<div className="text-xs text-gray-400">Avg Gain</div>
+					</div>
+					<div className="text-center">
+						<div className="text-xl font-bold text-yellow-400">+{stats.topGain}%</div>
+						<div className="text-xs text-gray-400">Best</div>
+					</div>
+					<div className="text-center">
+						<div className={`text-xl font-bold ${stats.winRate >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>
+							{stats.winRate}%
+						</div>
+						<div className="text-xs text-gray-400">Win Rate</div>
+					</div>
+				</div>
+			)}
+
 			{/* Gems Grid */}
 			{gems.length === 0 ? (
 				<div className="bg-gray-800 rounded-xl border border-gray-700 p-8 text-center">
@@ -232,6 +276,36 @@ export default function GemHunter() {
 											<div className="text-xs text-gray-400">1h change</div>
 										</div>
 									</div>
+
+								{/* Performance since ClawF detected */}
+								{gem.performance && gem.performance.hoursTracked > 0.1 && (
+									<div className={`mb-3 p-2 rounded-lg ${
+										gem.performance.gainSinceDetection >= 100 ? 'bg-emerald-900/40 border border-emerald-500/50' :
+										gem.performance.gainSinceDetection >= 50 ? 'bg-emerald-900/30 border border-emerald-500/30' :
+										gem.performance.gainSinceDetection > 0 ? 'bg-emerald-900/20' :
+										'bg-red-900/20'
+									}`}>
+										<div className="flex items-center justify-between">
+											<div className="text-xs text-gray-400">Since ClawF found it</div>
+											<div className={`text-lg font-bold ${
+												gem.performance.gainSinceDetection >= 0 ? 'text-emerald-400' : 'text-red-400'
+											}`}>
+												{gem.performance.gainSinceDetection >= 0 ? '+' : ''}{gem.performance.gainSinceDetection.toFixed(0)}%
+											</div>
+										</div>
+										{gem.performance.peakGain > gem.performance.gainSinceDetection && gem.performance.peakGain > 10 && (
+											<div className="flex items-center justify-between mt-1">
+												<div className="text-xs text-gray-500">Peak gain</div>
+												<div className="text-sm text-yellow-400">+{gem.performance.peakGain.toFixed(0)}%</div>
+											</div>
+										)}
+										<div className="text-xs text-gray-500 mt-1">
+											Tracking for {gem.performance.hoursTracked < 1 
+												? `${Math.round(gem.performance.hoursTracked * 60)}min` 
+												: `${gem.performance.hoursTracked.toFixed(1)}h`}
+										</div>
+									</div>
+								)}
 
 								{/* Stats */}
 								<div className="grid grid-cols-3 gap-2 mb-3">

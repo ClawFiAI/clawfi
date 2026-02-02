@@ -17,6 +17,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getClawF, SupportedChain, SUPPORTED_CHAINS } from '../services/clawf/index.js';
+import { trackToken, getPerformance, getTopPerformers, getTrackingStats } from '../services/clawf/tracker.js';
 
 // ============================================
 // Schemas
@@ -332,8 +333,8 @@ export default async function clawfRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /clawf/gems
-   * 100x GEM HUNTER - Scan for ultra-early tokens with 100x potential
-   * Focuses on: ultra-low mcap, fresh launches, viral activity, strong buy pressure
+   * ClawF Agent - Scan for high-potential opportunities
+   * Includes performance tracking since detection
    */
   fastify.get('/clawf/gems', async (request, reply) => {
     const query = RadarQuerySchema.safeParse(request.query);
@@ -355,19 +356,45 @@ export default async function clawfRoutes(fastify: FastifyInstance) {
         limit: query.data.limit || 15,
       });
 
+      // Track each gem and add performance data
+      const gemsWithPerformance = results.map(r => {
+        // Track the token (stores initial price if new, updates if existing)
+        trackToken(r.candidate.address, r.candidate.chain, r.candidate.symbol, r.candidate.priceUsd);
+        
+        // Get performance since ClawF detected it
+        const performance = getPerformance(r.candidate.address, r.candidate.chain, r.candidate.priceUsd);
+        
+        return {
+          ...r.candidate,
+          conditionsPassed: r.conditionsPassed,
+          conditionsTotal: r.conditionsTotal,
+          qualifies: r.qualifies,
+          // Performance since ClawF detected
+          performance: performance ? {
+            gainSinceDetection: performance.gainSinceDetection,
+            peakGain: performance.peakGain,
+            hoursTracked: performance.hoursTracked,
+            detectedAt: performance.detectedAt,
+          } : null,
+        };
+      });
+
+      // Get tracking stats
+      const stats = getTrackingStats();
+
       return {
         success: true,
         data: {
           count: results.length,
-          mode: '100x GEM HUNTER',
-          description: 'Ultra-early tokens with 100x potential. Focus on ultra-low mcap, fresh launches, strong buying.',
-          gems: results.map(r => ({
-            ...r.candidate,
-            conditionsPassed: r.conditionsPassed,
-            conditionsTotal: r.conditionsTotal,
-            conditions: r.conditions,
-            qualifies: r.qualifies,
-          })),
+          gems: gemsWithPerformance,
+          stats: {
+            totalTracked: stats.totalTracked,
+            avgGain: stats.avgGain,
+            topGain: stats.topGain,
+            winRate: stats.totalTracked > 0 
+              ? Math.round((stats.greenCount / stats.totalTracked) * 100) 
+              : 0,
+          },
         },
       };
     } catch (error) {
@@ -375,7 +402,36 @@ export default async function clawfRoutes(fastify: FastifyInstance) {
         success: false,
         error: {
           code: 'GEM_HUNTER_ERROR',
-          message: error instanceof Error ? error.message : 'Gem scan failed',
+          message: error instanceof Error ? error.message : 'Scan failed',
+        },
+      });
+    }
+  });
+
+  /**
+   * GET /clawf/performance
+   * Get top performing tokens since ClawF detected them
+   */
+  fastify.get('/clawf/performance', async (request, reply) => {
+    const { limit } = request.query as { limit?: string };
+    
+    try {
+      const topPerformers = getTopPerformers(parseInt(limit || '10'));
+      const stats = getTrackingStats();
+
+      return {
+        success: true,
+        data: {
+          stats,
+          topPerformers,
+        },
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: {
+          code: 'PERFORMANCE_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get performance',
         },
       });
     }
