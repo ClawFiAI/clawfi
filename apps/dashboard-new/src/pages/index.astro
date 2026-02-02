@@ -6,6 +6,7 @@ import ConnectionsOverview from '../components/ConnectionsOverview';
 import MarketOverview from '../components/MarketOverview';
 import QuickStats from '../components/QuickStats';
 import TokenSearch from '../components/TokenSearch';
+import GemHunter from '../components/GemHunter';
 ---
 
 <LayoutSidebar>
@@ -81,6 +82,13 @@ import TokenSearch from '../components/TokenSearch';
 				<p class="text-white font-medium mt-2 group-hover:text-primary transition-colors">Signals</p>
 				<p class="text-tertiary text-xs">Alerts</p>
 			</a>
+		</div>
+
+		<!-- 100x GEM HUNTER Section -->
+		<div class="card-glass overflow-hidden border-purple-500/30">
+			<div class="p-6">
+				<GemHunter client:load />
+			</div>
 		</div>
 
 		<!-- Trending Section -->

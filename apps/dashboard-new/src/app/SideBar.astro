@@ -5,6 +5,7 @@ const currentPath = Astro.url.pathname;
 
 const navItems = [
 	{ href: '', label: 'Dashboard', icon: 'dashboard' },
+	{ href: 'gems', label: '100x Gems', icon: 'gem', badge: 'NEW' },
 	{ href: 'market', label: 'Market', icon: 'chart', badge: 'Live' },
 	{ href: 'trending', label: 'Trending', icon: 'fire' },
 	{ href: 'watchlist', label: 'Watchlist', icon: 'star' },
@@ -48,6 +49,9 @@ function isActive(href: string) {
 						<span class="w-5 h-5 opacity-80">
 							{item.icon === 'dashboard' && (
 								<svg fill="currentColor" viewBox="0 0 20 20"><path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z"/><path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z"/></svg>
+							)}
+							{item.icon === 'gem' && (
+								<svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 2a2 2 0 00-2 2v14l3.5-2 3.5 2 3.5-2 3.5 2V4a2 2 0 00-2-2H5zm2.5 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm6.207.293a1 1 0 00-1.414 0l-6 6a1 1 0 101.414 1.414l6-6a1 1 0 000-1.414zm-2.207 2.207a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" clip-rule="evenodd"/></svg>
 							)}
 							{item.icon === 'terminal' && (
 								<svg fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>

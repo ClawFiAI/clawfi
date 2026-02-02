@@ -1,0 +1,100 @@
+---
+import LayoutSidebar from '../app/LayoutSidebar.astro';
+import GemHunter from '../components/GemHunter';
+---
+
+<LayoutSidebar>
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-bold text-white flex items-center gap-2">
+					<span class="text-3xl">💎</span>
+					100x Gem Hunter
+				</h1>
+				<p class="text-secondary mt-1">Find ultra-early tokens with 100x potential</p>
+			</div>
+		</div>
+
+		<!-- Strategy Explainer -->
+		<div class="card-glass p-6 bg-gradient-to-r from-purple-900/20 to-blue-900/20 border-purple-500/30">
+			<h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+				<span>🎯</span> How to Find 100x Gems
+			</h2>
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+				<div class="bg-black/20 rounded-lg p-4">
+					<div class="text-purple-400 font-bold mb-2">🆕 Ultra Fresh</div>
+					<p class="text-gray-300">Enter tokens &lt; 10 minutes old for maximum upside potential before price discovery</p>
+				</div>
+				<div class="bg-black/20 rounded-lg p-4">
+					<div class="text-purple-400 font-bold mb-2">💰 Ultra Low MCap</div>
+					<p class="text-gray-300">Target &lt; $50K market cap. A $10K token reaching $1M is 100x</p>
+				</div>
+				<div class="bg-black/20 rounded-lg p-4">
+					<div class="text-purple-400 font-bold mb-2">📈 Strong Buying</div>
+					<p class="text-gray-300">&gt; 65% buy ratio shows high conviction from early buyers</p>
+				</div>
+				<div class="bg-black/20 rounded-lg p-4">
+					<div class="text-purple-400 font-bold mb-2">🚀 Parabolic Momentum</div>
+					<p class="text-gray-300">&gt; 50% gain in first hour indicates strong launch momentum</p>
+				</div>
+				<div class="bg-black/20 rounded-lg p-4">
+					<div class="text-purple-400 font-bold mb-2">🔥 Viral Activity</div>
+					<p class="text-gray-300">High transaction count early means discovery is happening</p>
+				</div>
+				<div class="bg-black/20 rounded-lg p-4">
+					<div class="text-purple-400 font-bold mb-2">🌙 MOONSHOT Alert</div>
+					<p class="text-gray-300">When ALL indicators align = highest probability 100x setup</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Validated Results -->
+		<div class="card-glass p-6 border-emerald-500/30">
+			<h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+				<span>🏆</span> Validated Results
+			</h2>
+			<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+				<div class="bg-emerald-900/30 rounded-lg p-4 text-center">
+					<div class="text-3xl font-bold text-emerald-400">98x</div>
+					<div class="text-gray-400 text-sm">NASA</div>
+				</div>
+				<div class="bg-emerald-900/30 rounded-lg p-4 text-center">
+					<div class="text-3xl font-bold text-emerald-400">97x</div>
+					<div class="text-gray-400 text-sm">Tesla AI</div>
+				</div>
+				<div class="bg-blue-900/30 rounded-lg p-4 text-center">
+					<div class="text-3xl font-bold text-blue-400">9.3x</div>
+					<div class="text-gray-400 text-sm">MOLT</div>
+				</div>
+				<div class="bg-blue-900/30 rounded-lg p-4 text-center">
+					<div class="text-3xl font-bold text-blue-400">7x</div>
+					<div class="text-gray-400 text-sm">Reldo</div>
+				</div>
+			</div>
+			<p class="text-xs text-gray-500 mt-4 text-center">Past performance does not guarantee future results. DYOR.</p>
+		</div>
+
+		<!-- Main GEM HUNTER -->
+		<div class="card-glass overflow-hidden border-purple-500/30">
+			<div class="p-6">
+				<GemHunter client:load />
+			</div>
+		</div>
+
+		<!-- Risk Warning -->
+		<div class="card-glass p-4 bg-red-900/20 border-red-500/30">
+			<div class="flex items-start gap-4">
+				<span class="text-2xl">⚠️</span>
+				<div>
+					<h3 class="font-bold text-red-400">High Risk Warning</h3>
+					<p class="text-sm text-gray-400 mt-1">
+						Ultra-early gem hunting is extremely high risk. Most tokens fail within hours. 
+						Only invest what you can afford to lose completely. This is not financial advice. 
+						Always do your own research before investing.
+					</p>
+				</div>
+			</div>
+		</div>
+	</div>
+</LayoutSidebar>
