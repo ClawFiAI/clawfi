@@ -7,77 +7,58 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 		<!-- Header -->
 		<div>
 			<h1 class="text-2xl font-bold text-white flex items-center gap-2">
-				<span class="text-3xl">⚙️</span>
+				<svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+					<circle cx="12" cy="12" r="3"/>
+				</svg>
 				Settings
 			</h1>
 			<p class="text-secondary mt-1">Configure your ClawFi dashboard</p>
 		</div>
 
-		<!-- General Settings -->
+		<!-- Display Settings -->
 		<div class="card-glass overflow-hidden">
 			<div class="px-6 py-4 border-b border-white/10">
 				<h2 class="text-lg font-semibold text-white flex items-center gap-2">
-					<span>🛠️</span>
-					General
+					<svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+					</svg>
+					Display
 				</h2>
 			</div>
 			<div class="p-6 space-y-4">
-				<div>
-					<label class="block text-sm font-medium text-secondary mb-2">API URL</label>
-					<input
-						type="text"
-						id="api-url"
-						class="input-glass w-full"
-						readonly
-					/>
-				</div>
-				<div>
-					<label class="block text-sm font-medium text-secondary mb-2">Dashboard Version</label>
-					<input
-						type="text"
-						value="v0.4.2"
-						class="input-glass w-full"
-						readonly
-					/>
-				</div>
-			</div>
-		</div>
-
-		<!-- Extension Token -->
-		<div class="card-glass overflow-hidden">
-			<div class="px-6 py-4 border-b border-white/10">
-				<h2 class="text-lg font-semibold text-white flex items-center gap-2">
-					<span>🧩</span>
-					Browser Extension
-				</h2>
-			</div>
-			<div class="p-6 space-y-4">
-				<div>
-					<label class="block text-sm font-medium text-secondary mb-2">Auth Token (for ClawFi Extension)</label>
-					<div class="flex gap-2">
-						<input
-							type="text"
-							id="auth-token"
-							class="input-glass flex-1 font-mono text-xs"
-							readonly
-						/>
-						<button id="copy-token-btn" class="btn-glass btn-glass-primary whitespace-nowrap">
-							Copy Token
-						</button>
+				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+					<div>
+						<p class="font-medium text-white">Theme</p>
+						<p class="text-sm text-secondary">Choose light or dark mode</p>
 					</div>
-					<p class="text-xs text-tertiary mt-2">Paste this token in the ClawFi browser extension settings</p>
+					<select id="theme-select" class="input-glass px-4 py-2">
+						<option value="dark">Dark</option>
+						<option value="light">Light</option>
+						<option value="system">System</option>
+					</select>
 				</div>
-				
-				<div class="pt-4 border-t border-white/10">
-					<a 
-						href="chrome://extensions" 
-						class="text-primary text-sm hover:underline flex items-center gap-2"
-					>
-						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-						</svg>
-						Open Chrome Extensions
-					</a>
+				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+					<div>
+						<p class="font-medium text-white">Auto-refresh</p>
+						<p class="text-sm text-secondary">Automatically update market data</p>
+					</div>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" id="auto-refresh" class="sr-only peer" checked>
+						<div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+					</label>
+				</div>
+				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+					<div>
+						<p class="font-medium text-white">Refresh Interval</p>
+						<p class="text-sm text-secondary">How often to update data</p>
+					</div>
+					<select id="refresh-interval" class="input-glass px-4 py-2">
+						<option value="15">15 seconds</option>
+						<option value="30" selected>30 seconds</option>
+						<option value="60">1 minute</option>
+						<option value="300">5 minutes</option>
+					</select>
 				</div>
 			</div>
 		</div>
@@ -86,7 +67,9 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 		<div class="card-glass overflow-hidden">
 			<div class="px-6 py-4 border-b border-white/10">
 				<h2 class="text-lg font-semibold text-white flex items-center gap-2">
-					<span>🔔</span>
+					<svg class="w-5 h-5 text-primary-400" fill="currentColor" viewBox="0 0 24 24">
+						<path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
+					</svg>
 					Notifications
 				</h2>
 			</div>
@@ -102,21 +85,53 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 				</div>
 				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
 					<div>
-						<p class="font-medium text-white">Telegram Bot</p>
-						<p class="text-sm text-secondary">Receive signals via Telegram</p>
+						<p class="font-medium text-white">Sound Alerts</p>
+						<p class="text-sm text-secondary">Play sound when signals trigger</p>
 					</div>
-					<span class="badge-glass text-xs">
-						Configure in .env
-					</span>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" id="sound-alerts" class="sr-only peer">
+						<div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+					</label>
+				</div>
+			</div>
+		</div>
+
+		<!-- ClawF Agent Settings -->
+		<div class="card-glass overflow-hidden">
+			<div class="px-6 py-4 border-b border-white/10">
+				<h2 class="text-lg font-semibold text-white flex items-center gap-2">
+					<img src="/logo.png" alt="ClawF" class="w-5 h-5" />
+					ClawF Agent
+				</h2>
+			</div>
+			<div class="p-6 space-y-4">
+				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+					<div>
+						<p class="font-medium text-white">Min Score Threshold</p>
+						<p class="text-sm text-secondary">Only show gems above this score</p>
+					</div>
+					<select id="min-score" class="input-glass px-4 py-2">
+						<option value="0">Show All</option>
+						<option value="70">70+</option>
+						<option value="80" selected>80+</option>
+						<option value="90">90+</option>
+					</select>
 				</div>
 				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
 					<div>
-						<p class="font-medium text-white">Discord Webhook</p>
-						<p class="text-sm text-secondary">Send alerts to Discord channel</p>
+						<p class="font-medium text-white">Chains to Scan</p>
+						<p class="text-sm text-secondary">Which chains ClawF monitors</p>
 					</div>
-					<span class="badge-glass text-xs">
-						Configure in .env
-					</span>
+					<div class="flex gap-2">
+						<label class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 rounded-lg cursor-pointer">
+							<input type="checkbox" id="chain-solana" checked class="w-4 h-4 accent-primary-500">
+							<span class="text-sm text-white">Solana</span>
+						</label>
+						<label class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 rounded-lg cursor-pointer">
+							<input type="checkbox" id="chain-base" checked class="w-4 h-4 accent-primary-500">
+							<span class="text-sm text-white">Base</span>
+						</label>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -125,28 +140,31 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 		<div class="card-glass overflow-hidden">
 			<div class="px-6 py-4 border-b border-white/10">
 				<h2 class="text-lg font-semibold text-white flex items-center gap-2">
-					<span>💾</span>
+					<svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
+					</svg>
 					Data Management
 				</h2>
 			</div>
 			<div class="p-6 space-y-4">
 				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
 					<div>
-						<p class="font-medium text-white">Export Watchlist</p>
-						<p class="text-sm text-secondary">Download your watchlist as JSON</p>
+						<p class="font-medium text-white">Export All Data</p>
+						<p class="text-sm text-secondary">Download watchlist, alerts, and settings</p>
 					</div>
-					<button id="export-watchlist" class="btn-glass">
+					<button id="export-all" class="btn-glass">
 						Export
 					</button>
 				</div>
 				<div class="flex items-center justify-between p-4 bg-white/5 rounded-xl">
 					<div>
-						<p class="font-medium text-white">Export Alerts</p>
-						<p class="text-sm text-secondary">Download your price alerts as JSON</p>
+						<p class="font-medium text-white">Import Data</p>
+						<p class="text-sm text-secondary">Restore from a backup file</p>
 					</div>
-					<button id="export-alerts" class="btn-glass">
-						Export
-					</button>
+					<label class="btn-glass cursor-pointer">
+						Import
+						<input type="file" id="import-data" accept=".json" class="hidden">
+					</label>
 				</div>
 			</div>
 		</div>
@@ -155,7 +173,9 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 		<div class="card-glass overflow-hidden border-red-500/30">
 			<div class="px-6 py-4 border-b border-red-500/30 bg-red-500/10">
 				<h2 class="text-lg font-semibold text-red-400 flex items-center gap-2">
-					<span>⚠️</span>
+					<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+						<path d="M12 2L1 21h22L12 2zm0 4l7.53 13H4.47L12 6zm-1 4v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
+					</svg>
 					Danger Zone
 				</h2>
 			</div>
@@ -180,11 +200,11 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 				</div>
 				<div class="flex items-center justify-between p-4 bg-red-500/5 rounded-xl border border-red-500/20">
 					<div>
-						<p class="font-medium text-white">Sign Out</p>
-						<p class="text-sm text-secondary">End your current session</p>
+						<p class="font-medium text-white">Reset All Settings</p>
+						<p class="text-sm text-secondary">Restore default settings</p>
 					</div>
-					<button id="logout-btn" class="btn-glass hover:bg-red-500/20 hover:border-red-500/50">
-						Sign Out
+					<button id="reset-settings" class="btn-glass hover:bg-red-500/20 hover:border-red-500/50">
+						Reset
 					</button>
 				</div>
 			</div>
@@ -199,49 +219,123 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 				<a href="https://github.com/clawfiai/clawfi" target="_blank" rel="noopener noreferrer" class="text-tertiary hover:text-white transition-colors">
 					GitHub
 				</a>
-				<span class="text-tertiary">•</span>
+				<span class="text-tertiary">-</span>
 				<a href="https://twitter.com/clawfiai" target="_blank" rel="noopener noreferrer" class="text-tertiary hover:text-white transition-colors">
 					Twitter
 				</a>
-				<span class="text-tertiary">•</span>
+				<span class="text-tertiary">-</span>
 				<a href="https://docs.clawfi.ai" target="_blank" rel="noopener noreferrer" class="text-tertiary hover:text-white transition-colors">
 					Docs
 				</a>
 			</div>
-			<p class="text-tertiary text-xs mt-4">v0.4.2 • Built with Astro & React</p>
+			<p class="text-tertiary text-xs mt-4">v0.4.2 - Built with Astro & React</p>
 		</div>
 	</div>
 </LayoutSidebar>
 
 <script>
-	const token = localStorage.getItem('clawfi_token');
-	if (!token) window.location.href = '/login';
+	// Settings keys
+	const SETTINGS_KEY = 'clawfi_settings';
 	
-	const API_URL = 'https://api.clawfi.ai';
-	const apiUrlInput = document.getElementById('api-url');
-	if (apiUrlInput) {
-		(apiUrlInput as HTMLInputElement).value = API_URL;
-	}
+	// Default settings
+	const defaultSettings = {
+		theme: 'dark',
+		autoRefresh: true,
+		refreshInterval: 30,
+		soundAlerts: false,
+		minScore: 80,
+		chains: { solana: true, base: true }
+	};
 	
-	// Show auth token
-	const authTokenInput = document.getElementById('auth-token');
-	if (authTokenInput && token) {
-		(authTokenInput as HTMLInputElement).value = token;
-	}
-	
-	// Copy token button
-	document.getElementById('copy-token-btn')?.addEventListener('click', async () => {
-		const btn = document.getElementById('copy-token-btn');
-		if (token && btn) {
-			await navigator.clipboard.writeText(token);
-			btn.textContent = 'Copied!';
-			btn.classList.add('bg-emerald-500/30', 'border-emerald-500/50');
-			setTimeout(() => {
-				btn.textContent = 'Copy Token';
-				btn.classList.remove('bg-emerald-500/30', 'border-emerald-500/50');
-			}, 2000);
+	// Load settings from localStorage
+	function loadSettings() {
+		try {
+			const saved = localStorage.getItem(SETTINGS_KEY);
+			return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+		} catch {
+			return defaultSettings;
 		}
-	});
+	}
+	
+	// Save settings to localStorage
+	function saveSettings(settings: typeof defaultSettings) {
+		localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+	}
+	
+	// Initialize UI with saved settings
+	const settings = loadSettings();
+	
+	// Theme
+	const themeSelect = document.getElementById('theme-select') as HTMLSelectElement;
+	if (themeSelect) {
+		themeSelect.value = settings.theme;
+		themeSelect.addEventListener('change', () => {
+			settings.theme = themeSelect.value;
+			saveSettings(settings);
+			// Apply theme
+			if (themeSelect.value === 'light') {
+				document.documentElement.classList.remove('dark');
+			} else {
+				document.documentElement.classList.add('dark');
+			}
+		});
+	}
+	
+	// Auto-refresh toggle
+	const autoRefresh = document.getElementById('auto-refresh') as HTMLInputElement;
+	if (autoRefresh) {
+		autoRefresh.checked = settings.autoRefresh;
+		autoRefresh.addEventListener('change', () => {
+			settings.autoRefresh = autoRefresh.checked;
+			saveSettings(settings);
+		});
+	}
+	
+	// Refresh interval
+	const refreshInterval = document.getElementById('refresh-interval') as HTMLSelectElement;
+	if (refreshInterval) {
+		refreshInterval.value = settings.refreshInterval.toString();
+		refreshInterval.addEventListener('change', () => {
+			settings.refreshInterval = parseInt(refreshInterval.value);
+			saveSettings(settings);
+		});
+	}
+	
+	// Sound alerts
+	const soundAlerts = document.getElementById('sound-alerts') as HTMLInputElement;
+	if (soundAlerts) {
+		soundAlerts.checked = settings.soundAlerts;
+		soundAlerts.addEventListener('change', () => {
+			settings.soundAlerts = soundAlerts.checked;
+			saveSettings(settings);
+		});
+	}
+	
+	// Min score
+	const minScore = document.getElementById('min-score') as HTMLSelectElement;
+	if (minScore) {
+		minScore.value = settings.minScore.toString();
+		minScore.addEventListener('change', () => {
+			settings.minScore = parseInt(minScore.value);
+			saveSettings(settings);
+		});
+	}
+	
+	// Chains
+	const chainSolana = document.getElementById('chain-solana') as HTMLInputElement;
+	const chainBase = document.getElementById('chain-base') as HTMLInputElement;
+	if (chainSolana && chainBase) {
+		chainSolana.checked = settings.chains.solana;
+		chainBase.checked = settings.chains.base;
+		chainSolana.addEventListener('change', () => {
+			settings.chains.solana = chainSolana.checked;
+			saveSettings(settings);
+		});
+		chainBase.addEventListener('change', () => {
+			settings.chains.base = chainBase.checked;
+			saveSettings(settings);
+		});
+	}
 	
 	// Notifications
 	document.getElementById('enable-notifications')?.addEventListener('click', async () => {
@@ -251,36 +345,57 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 			if (permission === 'granted') {
 				new Notification('ClawFi', { body: 'Notifications enabled!', icon: '/favicon.svg' });
 				if (btn) {
-					btn.textContent = 'Enabled ✓';
+					btn.textContent = 'Enabled';
 					btn.classList.add('bg-emerald-500/30', 'border-emerald-500/50');
 				}
 			}
 		}
 	});
 	
-	// Export watchlist
-	document.getElementById('export-watchlist')?.addEventListener('click', () => {
-		const data = localStorage.getItem('clawfi_watchlist');
-		if (data) {
-			const blob = new Blob([data], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'clawfi-watchlist.json';
-			a.click();
+	// Check if notifications already enabled
+	if ('Notification' in window && Notification.permission === 'granted') {
+		const btn = document.getElementById('enable-notifications');
+		if (btn) {
+			btn.textContent = 'Enabled';
+			btn.classList.add('bg-emerald-500/30', 'border-emerald-500/50');
 		}
+	}
+	
+	// Export all data
+	document.getElementById('export-all')?.addEventListener('click', () => {
+		const data = {
+			settings: loadSettings(),
+			watchlist: JSON.parse(localStorage.getItem('clawfi_watchlist') || '[]'),
+			alerts: JSON.parse(localStorage.getItem('clawfi_alerts') || '[]'),
+			exportedAt: new Date().toISOString()
+		};
+		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `clawfi-backup-${new Date().toISOString().split('T')[0]}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
 	});
 	
-	// Export alerts
-	document.getElementById('export-alerts')?.addEventListener('click', () => {
-		const data = localStorage.getItem('clawfi_alerts');
-		if (data) {
-			const blob = new Blob([data], { type: 'application/json' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'clawfi-alerts.json';
-			a.click();
+	// Import data
+	document.getElementById('import-data')?.addEventListener('change', (e) => {
+		const file = (e.target as HTMLInputElement).files?.[0];
+		if (file) {
+			const reader = new FileReader();
+			reader.onload = (event) => {
+				try {
+					const data = JSON.parse(event.target?.result as string);
+					if (data.settings) localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings));
+					if (data.watchlist) localStorage.setItem('clawfi_watchlist', JSON.stringify(data.watchlist));
+					if (data.alerts) localStorage.setItem('clawfi_alerts', JSON.stringify(data.alerts));
+					alert('Data imported successfully! Refresh to apply.');
+					location.reload();
+				} catch {
+					alert('Invalid backup file');
+				}
+			};
+			reader.readAsText(file);
 		}
 	});
 	
@@ -300,9 +415,12 @@ import LayoutSidebar from '../app/LayoutSidebar.astro';
 		}
 	});
 	
-	// Logout
-	document.getElementById('logout-btn')?.addEventListener('click', () => {
-		localStorage.removeItem('clawfi_token');
-		window.location.href = '/login';
+	// Reset settings
+	document.getElementById('reset-settings')?.addEventListener('click', () => {
+		if (confirm('Are you sure you want to reset all settings to default?')) {
+			localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaultSettings));
+			alert('Settings reset! Refreshing...');
+			location.reload();
+		}
 	});
 </script>

@@ -24,24 +24,22 @@ import SideBar from './SideBar.astro';
 </LayoutCommon>
 
 <script is:inline>
+	// ClawFi runs without authentication in appliance mode
+	// All settings are stored locally in the browser
+	
+	// Load user settings from localStorage
 	(function() {
-		var token = localStorage.getItem('clawfi_token');
-		if (!token) {
-			window.location.replace('/login');
-			return;
+		var settings = localStorage.getItem('clawfi_settings');
+		if (settings) {
+			try {
+				var parsed = JSON.parse(settings);
+				// Apply theme
+				if (parsed.theme === 'light') {
+					document.documentElement.classList.remove('dark');
+				} else {
+					document.documentElement.classList.add('dark');
+				}
+			} catch(e) {}
 		}
-		fetch('https://api.clawfi.ai/me', {
-			headers: { 'Authorization': 'Bearer ' + token }
-		}).then(function(res) {
-			if (res.status === 401) {
-				localStorage.removeItem('clawfi_token');
-				window.location.replace('/login');
-			}
-		}).catch(function() {});
 	})();
-
-	window.clawfiLogout = function() {
-		localStorage.removeItem('clawfi_token');
-		window.location.replace('/login');
-	};
 </script>
