@@ -280,4 +280,91 @@ export async function registerLaunchpadRoutes(fastify: FastifyInstance): Promise
       data: connectors,
     };
   });
+
+  // ============================================
+  // Clanker API Proxy Routes
+  // ============================================
+
+  const CLANKER_API = 'https://www.clanker.world/api';
+
+  /**
+   * GET /launchpads/clanker/tokens
+   * Proxy to Clanker API - get paginated tokens
+   */
+  fastify.get('/launchpads/clanker/tokens', async (request: FastifyRequest<{ Querystring: Record<string, string> }>, reply: FastifyReply) => {
+    try {
+      const params = new URLSearchParams(request.query);
+      const response = await fetch(`${CLANKER_API}/tokens?${params}`);
+      
+      if (!response.ok) {
+        return reply.status(response.status).send({
+          success: false,
+          error: { code: 'CLANKER_ERROR', message: `Clanker API error: ${response.status}` },
+        });
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Clanker proxy error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'PROXY_ERROR', message: 'Failed to fetch from Clanker API' },
+      });
+    }
+  });
+
+  /**
+   * GET /launchpads/clanker/token/:address
+   * Proxy to Clanker API - get single token
+   */
+  fastify.get('/launchpads/clanker/token/:address', async (request: FastifyRequest<{ Params: { address: string } }>, reply: FastifyReply) => {
+    try {
+      const { address } = request.params;
+      const response = await fetch(`${CLANKER_API}/tokens/${address}`);
+      
+      if (!response.ok) {
+        return reply.status(response.status).send({
+          success: false,
+          error: { code: 'CLANKER_ERROR', message: `Clanker API error: ${response.status}` },
+        });
+      }
+
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error) {
+      console.error('Clanker proxy error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'PROXY_ERROR', message: 'Failed to fetch from Clanker API' },
+      });
+    }
+  });
+
+  /**
+   * GET /launchpads/clanker/search
+   * Proxy to Clanker API - search tokens/creators
+   */
+  fastify.get('/launchpads/clanker/search', async (request: FastifyRequest<{ Querystring: Record<string, string> }>, reply: FastifyReply) => {
+    try {
+      const params = new URLSearchParams(request.query);
+      const response = await fetch(`${CLANKER_API}/search?${params}`);
+      
+      if (!response.ok) {
+        return reply.status(response.status).send({
+          success: false,
+          error: { code: 'CLANKER_ERROR', message: `Clanker API error: ${response.status}` },
+        });
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Clanker proxy error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'PROXY_ERROR', message: 'Failed to fetch from Clanker API' },
+      });
+    }
+  });
 }
