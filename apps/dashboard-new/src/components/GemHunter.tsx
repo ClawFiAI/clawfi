@@ -1,5 +1,19 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../app/constants';
+import {
+	ClawFLogo,
+	RocketIcon,
+	SparkleIcon,
+	GemIcon,
+	ChartIcon,
+	BoltIcon,
+	CopyIcon,
+	RefreshIcon,
+	FireIcon,
+	XIcon,
+	SpinnerIcon,
+	MoonIcon,
+} from './Icons';
 
 interface GemPerformance {
 	gainSinceDetection: number;
@@ -68,6 +82,24 @@ function formatPrice(price: number): string {
 	return `$${price.toFixed(2)}`;
 }
 
+// Signal badge component with icon
+function SignalBadge({ type, className }: { type: 'moonshot' | 'prime' | 'parabolic' | 'fresh' | 'gem'; className: string }) {
+	const configs = {
+		moonshot: { icon: <MoonIcon size={12} />, text: 'MOONSHOT' },
+		prime: { icon: <ClawFLogo size={12} />, text: 'PRIME' },
+		parabolic: { icon: <RocketIcon size={12} />, text: 'PARABOLIC' },
+		fresh: { icon: <SparkleIcon size={12} />, text: 'FRESH' },
+		gem: { icon: <GemIcon size={12} />, text: 'GEM' },
+	};
+	const config = configs[type];
+	return (
+		<div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${className}`}>
+			{config.icon}
+			{config.text}
+		</div>
+	);
+}
+
 export default function GemHunter() {
 	const [gems, setGems] = useState<GemCandidate[]>([]);
 	const [stats, setStats] = useState<GemStats | null>(null);
@@ -77,7 +109,6 @@ export default function GemHunter() {
 
 	const fetchGems = async () => {
 		try {
-			// Don't clear gems while loading - keep showing previous results
 			setLoading(true);
 			const response = await fetch(`${API_URL}/clawf/gems?limit=10`);
 			
@@ -88,7 +119,6 @@ export default function GemHunter() {
 			const data: GemResponse = await response.json();
 			
 			if (data.success && data.data?.gems) {
-				// Only update if we got results
 				if (data.data.gems.length > 0) {
 					setGems(data.data.gems);
 				}
@@ -98,10 +128,8 @@ export default function GemHunter() {
 				setLastUpdated(new Date());
 				setError(null);
 			}
-			// Don't clear gems on empty response - keep previous
 		} catch (err) {
 			console.error('GemHunter error:', err);
-			// Only show error if we have no gems to display
 			if (gems.length === 0) {
 				setError(err instanceof Error ? err.message : 'Failed to fetch gems');
 			}
@@ -112,35 +140,35 @@ export default function GemHunter() {
 
 	useEffect(() => {
 		fetchGems();
-		// Refresh every 30 seconds for real-time gem hunting
 		const interval = setInterval(fetchGems, 30000);
 		return () => clearInterval(interval);
 	}, []);
 
-	// Get the best signal (moonshot > prime gem > ultra fresh)
-	const getBestSignal = (signals: string[]) => {
-		const moonshot = signals.find(s => s.includes('MOONSHOT'));
-		if (moonshot) return { text: '🦀 MOONSHOT', class: 'bg-primary-600 text-white animate-pulse' };
-		
-		const prime = signals.find(s => s.includes('PRIME GEM'));
-		if (prime) return { text: '🦀 PRIME', class: 'bg-emerald-600 text-white' };
-		
-		const parabolic = signals.find(s => s.includes('PARABOLIC'));
-		if (parabolic) return { text: '🚀 PARABOLIC', class: 'bg-orange-600 text-white' };
-		
-		const fresh = signals.find(s => s.includes('ULTRA FRESH'));
-		if (fresh) return { text: '🆕 FRESH', class: 'bg-blue-600 text-white' };
-		
-		return { text: '💎 GEM', class: 'bg-gray-600 text-white' };
+	const getBestSignal = (signals: string[]): { type: 'moonshot' | 'prime' | 'parabolic' | 'fresh' | 'gem'; class: string } => {
+		if (signals.some(s => s.includes('MOONSHOT'))) {
+			return { type: 'moonshot', class: 'bg-primary-600 text-white animate-pulse' };
+		}
+		if (signals.some(s => s.includes('PRIME GEM'))) {
+			return { type: 'prime', class: 'bg-emerald-600 text-white' };
+		}
+		if (signals.some(s => s.includes('PARABOLIC'))) {
+			return { type: 'parabolic', class: 'bg-orange-600 text-white' };
+		}
+		if (signals.some(s => s.includes('ULTRA FRESH'))) {
+			return { type: 'fresh', class: 'bg-blue-600 text-white' };
+		}
+		return { type: 'gem', class: 'bg-gray-600 text-white' };
 	};
 
-	// Only show skeleton on initial load when we have no gems
+	// Loading state
 	if (gems.length === 0 && loading) {
 		return (
 			<div className="space-y-4">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
-						<span className="text-3xl animate-bounce">🦀</span>
+						<div className="animate-bounce">
+							<ClawFLogo size={40} />
+						</div>
 						<div>
 							<h2 className="text-xl font-bold text-white">ClawF is scanning...</h2>
 							<p className="text-sm text-gray-400">Finding opportunities across all chains</p>
@@ -175,7 +203,7 @@ export default function GemHunter() {
 					<div className="flex items-center gap-3">
 						<div className="relative">
 							<div className={`w-3 h-3 rounded-full absolute -top-1 -right-1 ${loading ? 'bg-yellow-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></div>
-							<span className="text-3xl">🦀</span>
+							<ClawFLogo size={40} />
 						</div>
 						<div>
 							<h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -198,14 +226,14 @@ export default function GemHunter() {
 				>
 					{loading ? (
 						<>
-							<svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-								<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-								<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-							</svg>
+							<SpinnerIcon size={16} />
 							Working...
 						</>
 					) : (
-						<>🔄 Refresh</>
+						<>
+							<RefreshIcon size={16} />
+							Refresh
+						</>
 					)}
 				</button>
 			</div>
@@ -239,7 +267,9 @@ export default function GemHunter() {
 			{/* Gems Grid */}
 			{gems.length === 0 ? (
 				<div className="bg-gray-800 rounded-xl border border-gray-700 p-8 text-center">
-					<span className="text-5xl mb-4 block">🦀</span>
+					<div className="mb-4 flex justify-center">
+						<ClawFLogo size={64} />
+					</div>
 					<h3 className="text-lg font-medium text-white mb-2">ClawF is analyzing markets...</h3>
 					<p className="text-gray-400">The agent is scanning for opportunities. Results will appear here.</p>
 				</div>
@@ -274,14 +304,13 @@ export default function GemHunter() {
 														? 'bg-sky-500/30 text-sky-300 border border-sky-500/50' 
 														: 'bg-gray-700 text-gray-300'
 												}`}>
-													𝕏 {gem.socialSignals.mentionCount}
-													{gem.socialSignals.spikeDetected && ' 🔥'}
+													<XIcon size={12} />
+													{gem.socialSignals.mentionCount}
+													{gem.socialSignals.spikeDetected && <FireIcon size={12} className="text-orange-400" />}
 												</span>
 											)}
 										</div>
-										<div className={`px-3 py-1 rounded-full text-xs font-bold ${signal.class}`}>
-											{signal.text}
-										</div>
+										<SignalBadge type={signal.type} className={signal.class} />
 									</div>
 
 									{/* Score */}
@@ -311,51 +340,51 @@ export default function GemHunter() {
 										</div>
 									</div>
 
-								{/* Performance since ClawF detected */}
-								{gem.performance && gem.performance.hoursTracked > 0.1 && (
-									<div className={`mb-3 p-2 rounded-lg ${
-										gem.performance.gainSinceDetection >= 100 ? 'bg-emerald-900/40 border border-emerald-500/50' :
-										gem.performance.gainSinceDetection >= 50 ? 'bg-emerald-900/30 border border-emerald-500/30' :
-										gem.performance.gainSinceDetection > 0 ? 'bg-emerald-900/20' :
-										'bg-red-900/20'
-									}`}>
-										<div className="flex items-center justify-between">
-											<div className="text-xs text-gray-400">Since ClawF found it</div>
-											<div className={`text-lg font-bold ${
-												gem.performance.gainSinceDetection >= 0 ? 'text-emerald-400' : 'text-red-400'
-											}`}>
-												{gem.performance.gainSinceDetection >= 0 ? '+' : ''}{gem.performance.gainSinceDetection.toFixed(0)}%
+									{/* Performance since ClawF detected */}
+									{gem.performance && gem.performance.hoursTracked > 0.1 && (
+										<div className={`mb-3 p-2 rounded-lg ${
+											gem.performance.gainSinceDetection >= 100 ? 'bg-emerald-900/40 border border-emerald-500/50' :
+											gem.performance.gainSinceDetection >= 50 ? 'bg-emerald-900/30 border border-emerald-500/30' :
+											gem.performance.gainSinceDetection > 0 ? 'bg-emerald-900/20' :
+											'bg-red-900/20'
+										}`}>
+											<div className="flex items-center justify-between">
+												<div className="text-xs text-gray-400">Since ClawF found it</div>
+												<div className={`text-lg font-bold ${
+													gem.performance.gainSinceDetection >= 0 ? 'text-emerald-400' : 'text-red-400'
+												}`}>
+													{gem.performance.gainSinceDetection >= 0 ? '+' : ''}{gem.performance.gainSinceDetection.toFixed(0)}%
+												</div>
+											</div>
+											{gem.performance.peakGain > gem.performance.gainSinceDetection && gem.performance.peakGain > 10 && (
+												<div className="flex items-center justify-between mt-1">
+													<div className="text-xs text-gray-500">Peak gain</div>
+													<div className="text-sm text-yellow-400">+{gem.performance.peakGain.toFixed(0)}%</div>
+												</div>
+											)}
+											<div className="text-xs text-gray-500 mt-1">
+												Tracking for {gem.performance.hoursTracked < 1 
+													? `${Math.round(gem.performance.hoursTracked * 60)}min` 
+													: `${gem.performance.hoursTracked.toFixed(1)}h`}
 											</div>
 										</div>
-										{gem.performance.peakGain > gem.performance.gainSinceDetection && gem.performance.peakGain > 10 && (
-											<div className="flex items-center justify-between mt-1">
-												<div className="text-xs text-gray-500">Peak gain</div>
-												<div className="text-sm text-yellow-400">+{gem.performance.peakGain.toFixed(0)}%</div>
-											</div>
-										)}
-										<div className="text-xs text-gray-500 mt-1">
-											Tracking for {gem.performance.hoursTracked < 1 
-												? `${Math.round(gem.performance.hoursTracked * 60)}min` 
-												: `${gem.performance.hoursTracked.toFixed(1)}h`}
-										</div>
-									</div>
-								)}
+									)}
 
-								{/* Stats */}
-								<div className="grid grid-cols-3 gap-2 mb-3">
-									<div className="bg-gray-700/30 rounded p-2 text-center">
-										<div className="text-white font-medium">{formatNumber(gem.fdv)}</div>
-										<div className="text-xs text-gray-400">MCap</div>
+									{/* Stats */}
+									<div className="grid grid-cols-3 gap-2 mb-3">
+										<div className="bg-gray-700/30 rounded p-2 text-center">
+											<div className="text-white font-medium">{formatNumber(gem.fdv)}</div>
+											<div className="text-xs text-gray-400">MCap</div>
+										</div>
+										<div className="bg-gray-700/30 rounded p-2 text-center">
+											<div className="text-white font-medium">{formatNumber(gem.liquidity)}</div>
+											<div className="text-xs text-gray-400">Liquidity</div>
+										</div>
+										<div className="bg-gray-700/30 rounded p-2 text-center">
+											<div className="text-white font-medium">{formatPrice(gem.priceUsd)}</div>
+											<div className="text-xs text-gray-400">Price</div>
+										</div>
 									</div>
-									<div className="bg-gray-700/30 rounded p-2 text-center">
-										<div className="text-white font-medium">{formatNumber(gem.liquidity)}</div>
-										<div className="text-xs text-gray-400">Liquidity</div>
-									</div>
-									<div className="bg-gray-700/30 rounded p-2 text-center">
-										<div className="text-white font-medium">{formatPrice(gem.priceUsd)}</div>
-										<div className="text-xs text-gray-400">Price</div>
-									</div>
-								</div>
 
 									{/* Actions */}
 									<div className="flex gap-2">
@@ -363,27 +392,29 @@ export default function GemHunter() {
 											href={`https://dexscreener.com/${gem.chain}/${gem.address}`}
 											target="_blank"
 											rel="noopener noreferrer"
-											className="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm text-center transition-colors"
+											className="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm text-center transition-colors flex items-center justify-center gap-2"
 										>
-											📊 Chart
+											<ChartIcon size={16} />
+											Chart
 										</a>
-									<a
-										href={gem.chain === 'solana' 
-											? `https://jup.ag/swap/SOL-${gem.address}`
-											: `https://app.uniswap.org/swap?chain=${gem.chain}&outputCurrency=${gem.address}`
-										}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="flex-1 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm text-center transition-colors font-medium"
-									>
-										⚡ Trade
-									</a>
+										<a
+											href={gem.chain === 'solana' 
+												? `https://jup.ag/swap/SOL-${gem.address}`
+												: `https://app.uniswap.org/swap?chain=${gem.chain}&outputCurrency=${gem.address}`
+											}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="flex-1 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-sm text-center transition-colors font-medium flex items-center justify-center gap-2"
+										>
+											<BoltIcon size={16} />
+											Trade
+										</a>
 										<button
 											onClick={() => navigator.clipboard.writeText(gem.address)}
 											className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition-colors"
 											title="Copy address"
 										>
-											📋
+											<CopyIcon size={16} />
 										</button>
 									</div>
 								</div>
@@ -392,7 +423,6 @@ export default function GemHunter() {
 					})}
 				</div>
 			)}
-
 		</div>
 	);
 }

@@ -200,11 +200,11 @@ export default function TrendingTokens() {
           onChange={(e) => setSortBy(e.target.value as SortOption)}
           className="input-glass px-4 py-2 min-w-[150px]"
         >
-          <option value="boosts">🔥 Most Boosted</option>
-          <option value="marketCap">💰 Market Cap</option>
-          <option value="volume">📊 Volume 24h</option>
-          <option value="change24h">📈 Price Change</option>
-          <option value="liquidity">💧 Liquidity</option>
+          <option value="boosts">Most Boosted</option>
+          <option value="marketCap">Market Cap</option>
+          <option value="volume">Volume 24h</option>
+          <option value="change24h">Price Change</option>
+          <option value="liquidity">Liquidity</option>
         </select>
 
         {/* Refresh */}
@@ -234,7 +234,11 @@ export default function TrendingTokens() {
       {/* Token List */}
       {filteredTokens.length === 0 ? (
         <div className="card-glass p-12 text-center">
-          <div className="text-4xl mb-4">🔍</div>
+          <div className="w-12 h-12 mx-auto mb-4 bg-white/10 rounded-xl flex items-center justify-center">
+            <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
           <p className="text-white font-medium">No tokens found</p>
           <p className="text-secondary text-sm mt-1">Try adjusting your filters</p>
         </div>
@@ -276,7 +280,10 @@ export default function TrendingTokens() {
                       }}
                     />
                   ) : (
-                    <span className="text-xl">🪙</span>
+                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6v12M6 12h12"/>
+                    </svg>
                   )}
                 </div>
 
@@ -296,8 +303,11 @@ export default function TrendingTokens() {
                       {getChainName(token.chainId)}
                     </span>
                     {token.amount && token.amount > 1 && (
-                      <span className="badge-glass badge-glass-orange text-[10px]">
-                        🔥 {token.amount} boosts
+                      <span className="badge-glass badge-glass-orange text-[10px] flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 23c-4.97 0-9-3.58-9-8 0-3.19 2.06-6.37 4.06-8.56A.37.37 0 0 1 7.7 6c.16 0 .3.13.36.29.59 1.59 2.07 3.71 3.94 3.71 1.71 0 2.5-1.29 2.5-2.5 0-.7-.28-1.52-.78-2.32a.38.38 0 0 1 .54-.49C17.07 6.78 21 10.34 21 15c0 4.42-4.03 8-9 8z"/>
+                        </svg>
+                        {token.amount} boosts
                       </span>
                     )}
                   </div>

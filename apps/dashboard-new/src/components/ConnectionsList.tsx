@@ -129,28 +129,28 @@ export default function ConnectionsList() {
 			type: 'cex',
 			title: 'Centralized Exchanges',
 			description: 'Connect exchange APIs for trading',
-			icon: '🏦',
+			icon: 'building',
 			options: ['Binance', 'Coinbase', 'Kraken', 'OKX', 'Bybit', 'KuCoin'],
 		},
 		{
 			type: 'dex',
 			title: 'DEX Aggregators',
 			description: 'Swap tokens across chains',
-			icon: '🔄',
+			icon: 'refresh',
 			options: ['Jupiter (Solana)', 'Uniswap (ETH)', 'PancakeSwap (BSC)', '1inch'],
 		},
 		{
 			type: 'launchpad',
 			title: 'Launchpads',
 			description: 'Monitor new token launches',
-			icon: '🚀',
+			icon: 'rocket',
 			options: ['Clanker (Base)', 'Pump.fun (Solana)', 'Four.Meme (BSC)'],
 		},
 		{
 			type: 'wallet',
 			title: 'Wallets',
 			description: 'Track wallet activity',
-			icon: '👛',
+			icon: 'wallet',
 			options: ['EVM Wallets', 'Solana Wallets', 'Multi-sig'],
 		},
 	];
@@ -162,7 +162,9 @@ export default function ConnectionsList() {
 					{/* Info Banner */}
 					<div className="glass-card p-4 border-l-4 border-primary-500">
 						<div className="flex items-start gap-3">
-							<span className="text-2xl">⚡</span>
+							<svg className="w-6 h-6 text-primary-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+								<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+							</svg>
 							<div>
 								<h3 className="font-semibold text-white mb-1">Connect Your Accounts</h3>
 								<p className="text-sm text-gray-400">
@@ -182,7 +184,28 @@ export default function ConnectionsList() {
 								className="glass-card p-6 hover:border-primary-500/50 transition-all cursor-pointer group"
 							>
 								<div className="flex items-start gap-4">
-									<div className="text-4xl">{conn.icon}</div>
+									<div className="w-12 h-12 rounded-xl bg-gray-700/50 flex items-center justify-center">
+										{conn.icon === 'building' && (
+											<svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+												<path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+											</svg>
+										)}
+										{conn.icon === 'refresh' && (
+											<svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+												<path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+											</svg>
+										)}
+										{conn.icon === 'rocket' && (
+											<svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+												<path strokeLinecap="round" strokeLinejoin="round" d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+											</svg>
+										)}
+										{conn.icon === 'wallet' && (
+											<svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+												<path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+											</svg>
+										)}
+									</div>
 									<div className="flex-1">
 										<h3 className="font-semibold text-white mb-1 group-hover:text-primary-400 transition-colors">
 											{conn.title}
@@ -213,7 +236,10 @@ export default function ConnectionsList() {
 					{/* Quick Setup Guide */}
 					<div className="glass-card p-6">
 						<h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-							<span>📋</span> Quick Setup Guide
+							<svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+								<path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+							</svg>
+							Quick Setup Guide
 						</h3>
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<div className="flex items-start gap-3">

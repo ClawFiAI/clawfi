@@ -112,11 +112,13 @@ export default function MarketOverview() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span className="text-2xl">🔥</span>
+            <svg className="w-6 h-6 text-orange-400" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 23c-4.97 0-9-3.58-9-8 0-3.19 2.06-6.37 4.06-8.56A.37.37 0 0 1 7.7 6c.16 0 .3.13.36.29.59 1.59 2.07 3.71 3.94 3.71 1.71 0 2.5-1.29 2.5-2.5 0-.7-.28-1.52-.78-2.32a.38.38 0 0 1 .54-.49C17.07 6.78 21 10.34 21 15c0 4.42-4.03 8-9 8z"/>
+            </svg>
             Trending Now
           </h2>
           <p className="text-sm text-secondary mt-1">
-            Hot tokens across all chains • Live from Dexscreener
+            Hot tokens across all chains - Live from Dexscreener
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -182,7 +184,10 @@ export default function MarketOverview() {
                       }}
                     />
                   ) : (
-                    <span className="text-xl">🪙</span>
+                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6v12M6 12h12"/>
+                    </svg>
                   )}
                 </div>
 
@@ -199,8 +204,11 @@ export default function MarketOverview() {
                       {getChainName(token.chainId)}
                     </span>
                     {token.amount && (
-                      <span className="badge-glass badge-glass-blue text-[10px]">
-                        🚀 {token.amount} boosts
+                      <span className="badge-glass badge-glass-blue text-[10px] flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+                        </svg>
+                        {token.amount} boosts
                       </span>
                     )}
                   </div>

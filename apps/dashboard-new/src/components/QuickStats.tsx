@@ -12,6 +12,31 @@ interface Stats {
   totalBoosts: number;
 }
 
+// Icon components
+const FireIcon = () => (
+  <svg className="w-6 h-6 text-orange-400" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M12 23c-4.97 0-9-3.58-9-8 0-3.19 2.06-6.37 4.06-8.56A.37.37 0 0 1 7.7 6c.16 0 .3.13.36.29.59 1.59 2.07 3.71 3.94 3.71 1.71 0 2.5-1.29 2.5-2.5 0-.7-.28-1.52-.78-2.32a.38.38 0 0 1 .54-.49C17.07 6.78 21 10.34 21 15c0 4.42-4.03 8-9 8z"/>
+  </svg>
+);
+
+const RocketIcon = () => (
+  <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+  </svg>
+);
+
+const ChainIcon = () => (
+  <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+  </svg>
+);
+
+const ChartIcon = () => (
+  <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M19 9l-5 5-4-4-3 3"/>
+  </svg>
+);
+
 export default function QuickStats() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,26 +93,26 @@ export default function QuickStats() {
     {
       label: 'Trending Tokens',
       value: stats?.trendingCount || 0,
-      icon: '🔥',
+      icon: <FireIcon />,
       color: 'from-orange-500/20 to-red-500/20',
     },
     {
       label: 'Total Boosts',
       value: stats?.totalBoosts || 0,
-      icon: '🚀',
+      icon: <RocketIcon />,
       color: 'from-blue-500/20 to-purple-500/20',
     },
     {
       label: 'Top Chain',
       value: stats?.topChains[0]?.chain || '-',
       subValue: stats?.topChains[0]?.count ? `${stats.topChains[0].count} tokens` : '',
-      icon: '⛓️',
+      icon: <ChainIcon />,
       color: 'from-emerald-500/20 to-teal-500/20',
     },
     {
       label: 'Market Activity',
       value: 'High',
-      icon: '📈',
+      icon: <ChartIcon />,
       color: 'from-yellow-500/20 to-orange-500/20',
     },
   ];
@@ -101,7 +126,7 @@ export default function QuickStats() {
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-secondary">{stat.label}</span>
-            <span className="text-xl">{stat.icon}</span>
+            {stat.icon}
           </div>
           <p className="text-2xl font-bold text-white">
             {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
