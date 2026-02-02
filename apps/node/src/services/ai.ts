@@ -181,6 +181,7 @@ export interface MoonshotCandidate {
   buys24h: number;
   sells24h: number;
   moonshotScore: number; // 0-100, higher = more potential
+  rugScore?: number; // 0-100, lower = safer
   signals: string[];
   risk: 'extreme' | 'high' | 'medium';
 }
@@ -457,6 +458,92 @@ export class AIService {
    * Calculate moonshot score for a token
    * Looks for early-stage tokens with explosive potential
    */
+  // ============================================
+  // Rug Detection System
+  // ============================================
+
+  /**
+   * Perform comprehensive rug check on a token
+   * Returns false if token is likely ruggable
+   */
+  private performRugCheck(token: {
+    liquidity: number;
+    fdv: number;
+    volume24h: number;
+    buys24h: number;
+    sells24h: number;
+    priceChange1h?: number;
+    priceChange24h?: number;
+  }): { safe: boolean; warnings: string[]; rugScore: number } {
+    const warnings: string[] = [];
+    let rugScore = 0; // Higher = more likely to be a rug
+
+    // CHECK 1: Minimum liquidity threshold
+    // Tokens with < $5K liquidity are easily ruggable
+    if (token.liquidity < 5000) {
+      rugScore += 40;
+      warnings.push('🚨 Liquidity below $5K - extreme rug risk');
+    } else if (token.liquidity < 10000) {
+      rugScore += 20;
+      warnings.push('⚠️ Low liquidity (<$10K) - rug risk');
+    }
+
+    // CHECK 2: Liquidity to market cap ratio
+    // If liquidity is < 5% of mcap, dev can rug easily
+    if (token.fdv > 0 && token.liquidity > 0) {
+      const liqToMcapRatio = (token.liquidity / token.fdv) * 100;
+      if (liqToMcapRatio < 2) {
+        rugScore += 35;
+        warnings.push(`🚨 Liquidity only ${liqToMcapRatio.toFixed(1)}% of mcap - easy rug`);
+      } else if (liqToMcapRatio < 5) {
+        rugScore += 20;
+        warnings.push(`⚠️ Low liquidity ratio (${liqToMcapRatio.toFixed(1)}%)`);
+      }
+    }
+
+    // CHECK 3: Honeypot detection - very few sells vs buys
+    // If people can't sell, it's a honeypot
+    const totalTxns = token.buys24h + token.sells24h;
+    if (totalTxns > 50) {
+      const sellRatio = token.sells24h / totalTxns;
+      if (sellRatio < 0.1) {
+        rugScore += 50;
+        warnings.push('🍯 HONEYPOT WARNING: <10% sells - people may not be able to sell!');
+      } else if (sellRatio < 0.2) {
+        rugScore += 25;
+        warnings.push('🍯 Potential honeypot: Very few sells (<20%)');
+      }
+    } else if (totalTxns < 20 && token.fdv > 100000) {
+      rugScore += 15;
+      warnings.push('⚠️ Very few transactions for this mcap');
+    }
+
+    // CHECK 4: Volume sanity check
+    // If volume is 0 or extremely low relative to liquidity, suspicious
+    if (token.volume24h < 1000 && token.liquidity > 10000) {
+      rugScore += 15;
+      warnings.push('⚠️ Dead volume - no trading activity');
+    }
+
+    // CHECK 5: Extreme pump detection (potential pump & dump)
+    if (token.priceChange1h && token.priceChange1h > 500) {
+      rugScore += 20;
+      warnings.push('⚠️ Extreme pump (+500% 1h) - likely dump incoming');
+    }
+
+    // CHECK 6: Market cap sanity
+    // Extremely high mcap with low liquidity = fake/manipulated
+    if (token.fdv > 10000000 && token.liquidity < 50000) {
+      rugScore += 40;
+      warnings.push('🚨 Fake mcap: $10M+ with <$50K liquidity');
+    }
+
+    // Determine if safe (rug score < 50 is passable)
+    const safe = rugScore < 50;
+
+    return { safe, warnings, rugScore };
+  }
+
   private calculateMoonshotScore(token: {
     priceChange1h?: number;
     priceChange24h?: number;
@@ -599,12 +686,12 @@ export class AIService {
 
       const candidates: MoonshotCandidate[] = [];
 
-      // Process DexScreener data
+      // Process DexScreener data with rug filtering
       if (dexGainers?.pairs) {
-        for (const pair of dexGainers.pairs.slice(0, 30)) {
+        for (const pair of dexGainers.pairs.slice(0, 50)) {
           if (options?.chain && pair.chainId !== options.chain) continue;
           
-          const { score, signals } = this.calculateMoonshotScore({
+          const tokenData = {
             priceChange1h: pair.priceChange?.h1,
             priceChange24h: pair.priceChange?.h24,
             volume24h: pair.volume?.h24 || 0,
@@ -612,7 +699,21 @@ export class AIService {
             fdv: pair.fdv || 0,
             buys24h: pair.txns?.h24?.buys || 0,
             sells24h: pair.txns?.h24?.sells || 0,
-          });
+          };
+
+          // 🛡️ RUG CHECK - Skip ruggable tokens
+          const rugCheck = this.performRugCheck(tokenData);
+          if (!rugCheck.safe) {
+            console.log(`🚫 Filtered ${pair.baseToken.symbol}: Rug score ${rugCheck.rugScore} - ${rugCheck.warnings[0]}`);
+            continue;
+          }
+
+          const { score, signals } = this.calculateMoonshotScore(tokenData);
+
+          // Add rug warnings to signals if any
+          if (rugCheck.warnings.length > 0 && rugCheck.rugScore > 20) {
+            signals.push(...rugCheck.warnings);
+          }
 
           if (score >= minScore) {
             candidates.push({
@@ -629,6 +730,7 @@ export class AIService {
               buys24h: pair.txns?.h24?.buys || 0,
               sells24h: pair.txns?.h24?.sells || 0,
               moonshotScore: score,
+              rugScore: rugCheck.rugScore,
               signals,
               risk: score > 70 ? 'extreme' : score > 50 ? 'high' : 'medium',
             });
@@ -636,23 +738,35 @@ export class AIService {
         }
       }
 
-      // Also check launchpad tokens that might be early gems
+      // Also check launchpad tokens with rug filtering
       for (const token of launchpadTokens) {
         // Get live data for launchpad token
         const liveData = await this.getDexScreenerToken(token.tokenAddress);
         if (!liveData) continue;
 
-        const { score, signals } = this.calculateMoonshotScore({
+        const tokenData = {
           priceChange24h: liveData.priceChange24h,
           volume24h: liveData.volume24h,
           liquidity: liveData.liquidity,
           fdv: liveData.fdv,
           buys24h: liveData.buys24h,
           sells24h: liveData.sells24h,
-        });
+        };
 
-        // Add launchpad context
+        // 🛡️ RUG CHECK - Skip ruggable tokens
+        const rugCheck = this.performRugCheck(tokenData);
+        if (!rugCheck.safe) {
+          console.log(`🚫 Filtered launchpad ${liveData.symbol}: Rug score ${rugCheck.rugScore} - ${rugCheck.warnings[0]}`);
+          continue;
+        }
+
+        const { score, signals } = this.calculateMoonshotScore(tokenData);
+
+        // Add launchpad context and any rug warnings
         signals.push(`📍 From ${token.launchpad}`);
+        if (rugCheck.warnings.length > 0 && rugCheck.rugScore > 20) {
+          signals.push(...rugCheck.warnings);
+        }
 
         if (score >= minScore) {
           // Check if already in list
@@ -671,6 +785,7 @@ export class AIService {
               buys24h: liveData.buys24h,
               sells24h: liveData.sells24h,
               moonshotScore: score,
+              rugScore: rugCheck.rugScore,
               signals,
               risk: score > 70 ? 'extreme' : score > 50 ? 'high' : 'medium',
             });
