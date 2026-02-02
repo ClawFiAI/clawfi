@@ -1,6 +1,7 @@
 ---
 import LayoutSidebar from '../app/LayoutSidebar.astro';
 import GemHunter from '../components/GemHunter';
+import TopMooners from '../components/TopMooners';
 ---
 
 <LayoutSidebar>
@@ -18,6 +19,11 @@ import GemHunter from '../components/GemHunter';
 				<span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
 				<span class="text-emerald-400">Agent Active</span>
 			</div>
+		</div>
+
+		<!-- Top Mooners Section - Shows proven winners -->
+		<div class="card-glass p-6 bg-gradient-to-r from-yellow-900/10 to-orange-900/10 border-yellow-500/20">
+			<TopMooners client:load />
 		</div>
 
 		<!-- Agent Status -->
@@ -39,7 +45,7 @@ import GemHunter from '../components/GemHunter';
 			</div>
 		</div>
 
-		<!-- Main Agent Output -->
+		<!-- Main Agent Output - New Detections -->
 		<div class="card-glass overflow-hidden border-purple-500/30">
 			<div class="p-6">
 				<GemHunter client:load />

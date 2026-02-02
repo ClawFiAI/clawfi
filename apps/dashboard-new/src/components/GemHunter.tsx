@@ -275,17 +275,20 @@ export default function GemHunter() {
 				</div>
 			) : (
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					{gems.map((gem, index) => {
+					{/* Sort by 1h change to show biggest mooners first */}
+					{[...gems].sort((a, b) => b.priceChange1h - a.priceChange1h).map((gem, index) => {
 						const signal = getBestSignal(gem.signals);
 						const isMoonshot = gem.signals.some(s => s.includes('MOONSHOT'));
-						const isParabolic = gem.priceChange1h > 100;
+						const isHugeMoon = gem.priceChange1h >= 500; // 500%+ = huge moon
+						const isParabolic = gem.priceChange1h >= 100; // 100%+ = parabolic
 						
 						return (
 							<div 
 								key={gem.address}
 								className={`bg-gray-800 rounded-xl border transition-all hover:scale-[1.02] ${
-									isMoonshot ? 'border-primary-500 ring-2 ring-primary-500/30 animate-pulse' :
-									isParabolic ? 'border-orange-500' :
+									isHugeMoon ? 'border-yellow-500 ring-2 ring-yellow-500/40 bg-gradient-to-br from-yellow-900/20 to-orange-900/20' :
+									isMoonshot ? 'border-primary-500 ring-2 ring-primary-500/30' :
+									isParabolic ? 'border-orange-500 ring-1 ring-orange-500/30' :
 									index === 0 ? 'border-primary-500' : 
 									'border-gray-700'
 								}`}
@@ -333,10 +336,21 @@ export default function GemHunter() {
 											</div>
 										</div>
 										<div className="text-right">
-											<div className={`text-2xl font-bold ${gem.priceChange1h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-												{gem.priceChange1h >= 0 ? '+' : ''}{gem.priceChange1h.toFixed(0)}%
+											<div className={`text-2xl font-bold ${
+												gem.priceChange1h >= 500 ? 'text-yellow-400 animate-pulse' :
+												gem.priceChange1h >= 100 ? 'text-orange-400' :
+												gem.priceChange1h >= 0 ? 'text-emerald-400' : 
+												'text-red-400'
+											}`}>
+												{gem.priceChange1h >= 0 ? '+' : ''}
+												{gem.priceChange1h >= 1000 
+													? `${(gem.priceChange1h / 1000).toFixed(1)}K%`
+													: `${gem.priceChange1h.toFixed(0)}%`
+												}
 											</div>
-											<div className="text-xs text-gray-400">1h change</div>
+											<div className="text-xs text-gray-400">
+												{gem.priceChange1h >= 500 ? 'MOONING' : '1h change'}
+											</div>
 										</div>
 									</div>
 
