@@ -272,6 +272,7 @@ export class DiscoveryEngine {
 
   /**
    * Calculate PRE-PUMP scores for a token
+   * Refined based on analysis of 100+ pumps
    * Higher score = more likely to pump in next 4 hours
    */
   private calculateScores(
@@ -280,66 +281,122 @@ export class DiscoveryEngine {
   ): { scores: TokenScores; signals: string[] } {
     const signals: string[] = [];
     
-    // Momentum Score (0-100) - focuses on BUILDING momentum, not already pumped
+    // Core metrics
     let momentum = 0;
     const totalTxns = token.buys24h + token.sells24h;
     const buyRatio = totalTxns > 0 ? token.buys24h / totalTxns : 0;
     const volumeRatio = token.fdv > 0 ? token.volume24h / token.fdv : 0;
-    
-    // ACCUMULATION DETECTION - High volume + buy pressure + low price change = loading
-    if (volumeRatio > 0.5 && buyRatio > 0.6 && token.priceChange1h < 30) {
-      momentum += 35;
-      signals.push(`🎯 Accumulation detected - smart money loading`);
-    }
-    else if (volumeRatio > 0.3 && buyRatio > 0.55) {
-      momentum += 25;
-      signals.push(`📥 Building position - buyers accumulating`);
+    const liqRatio = token.fdv > 0 ? (token.liquidity / token.fdv) * 100 : 0;
+
+    // ============================================
+    // CRITICAL: Negative 1h = DUMP, skip
+    // ============================================
+    if (token.priceChange1h < -5) {
+      momentum -= 30; // Heavy penalty for dumps
+      signals.push(`⛔ Dumping ${token.priceChange1h.toFixed(0)}% - AVOID`);
     }
 
-    // EARLY MOMENTUM - Just starting to move (sweet spot: 10-50% 1h)
-    if (token.priceChange1h >= 10 && token.priceChange1h < 50) {
-      momentum += 30;
-      signals.push(`⚡ Early pump +${token.priceChange1h.toFixed(0)}% - catching the wave`);
+    // ============================================
+    // PRIME PATTERN: Accumulation Breakout
+    // High vol/mcap + positive 1h + buy pressure = about to rip
+    // ============================================
+    if (volumeRatio > 0.5 && token.priceChange1h >= 0 && token.priceChange1h < 30 && buyRatio > 0.55) {
+      momentum += 40;
+      signals.push(`🎯 BREAKOUT SETUP: Heavy volume, buyers loading`);
     }
-    else if (token.priceChange1h >= 5 && token.priceChange1h < 10) {
+    else if (volumeRatio > 0.3 && buyRatio > 0.55 && token.priceChange1h >= 0) {
+      momentum += 25;
+      signals.push(`📥 Accumulation phase detected`);
+    }
+
+    // ============================================
+    // SWEET SPOT: Early Momentum (5-30% 1h)
+    // Just started moving = best entry
+    // ============================================
+    if (token.priceChange1h >= 5 && token.priceChange1h < 30) {
+      momentum += 35;
+      signals.push(`⚡ PRIME ENTRY: Early momentum +${token.priceChange1h.toFixed(0)}%`);
+    }
+    else if (token.priceChange1h >= 30 && token.priceChange1h < 60) {
       momentum += 20;
-      signals.push(`📈 Warming up +${token.priceChange1h.toFixed(0)}%`);
+      signals.push(`🚀 Active pump +${token.priceChange1h.toFixed(0)}% - can still catch`);
     }
-    else if (token.priceChange1h >= 50 && token.priceChange1h < 100) {
-      momentum += 15; // Less score - already moving fast
-      signals.push(`🚀 Active pump - watch for entry`);
+    else if (token.priceChange1h >= 60 && token.priceChange1h < 100) {
+      momentum += 10;
+      signals.push(`⚠️ Fast mover +${token.priceChange1h.toFixed(0)}% - risky entry`);
     }
     else if (token.priceChange1h >= 100) {
-      momentum += 5; // Low score - might be too late
-      signals.push(`⚠️ Already +${token.priceChange1h.toFixed(0)}% - late entry risk`);
+      momentum -= 10; // Penalty for very late
+      signals.push(`🚨 TOO LATE: Already +${token.priceChange1h.toFixed(0)}%`);
+    }
+    else if (token.priceChange1h >= 0 && token.priceChange1h < 5) {
+      // Flat but not negative = potential accumulation
+      if (volumeRatio > 0.5) {
+        momentum += 30;
+        signals.push(`🔥 STEALTH MODE: High volume, flat price = loading`);
+      } else {
+        momentum += 10;
+      }
     }
 
-    // BUY PRESSURE DOMINANCE
-    if (buyRatio > 0.75) {
+    // ============================================
+    // BUY PRESSURE: More buyers = pump fuel
+    // ============================================
+    if (buyRatio > 0.70) {
       momentum += 25;
-      signals.push(`🐋 Whale accumulation (${(buyRatio * 100).toFixed(0)}% buys)`);
+      signals.push(`🐋 Whale buying: ${(buyRatio * 100).toFixed(0)}% buys`);
     }
-    else if (buyRatio > 0.65) {
+    else if (buyRatio > 0.60) {
       momentum += 20;
-      signals.push(`💪 Strong buy pressure ${(buyRatio * 100).toFixed(0)}%`);
+      signals.push(`💪 Strong demand: ${(buyRatio * 100).toFixed(0)}% buys`);
     }
     else if (buyRatio > 0.55) {
       momentum += 15;
     }
-
-    // FRESH BUYER INFLUX
-    const buyerRatio = token.uniqueSellers24h > 0 
-      ? token.uniqueBuyers24h / token.uniqueSellers24h 
-      : token.uniqueBuyers24h;
-    if (buyerRatio > 2) {
-      momentum += 15;
-      signals.push(`👥 ${buyerRatio.toFixed(1)}x more buyers than sellers`);
+    else if (buyRatio < 0.45) {
+      momentum -= 15; // Selling pressure
+      signals.push(`📉 Sell pressure: ${(buyRatio * 100).toFixed(0)}% buys`);
     }
 
-    // Activity contribution
-    if (totalTxns > 1000) momentum += 15;
+    // ============================================
+    // MICRO CAP: Maximum pump potential
+    // ============================================
+    if (token.fdv < 50000 && token.fdv > 5000) {
+      momentum += 20;
+      signals.push(`💎 GEM: $${(token.fdv / 1000).toFixed(0)}K mcap - 100x potential`);
+    }
+    else if (token.fdv < 100000) {
+      momentum += 15;
+      signals.push(`🎯 Micro: $${(token.fdv / 1000).toFixed(0)}K - 50x potential`);
+    }
+    else if (token.fdv < 250000) {
+      momentum += 10;
+      signals.push(`💰 Low cap: $${(token.fdv / 1000).toFixed(0)}K - 20x potential`);
+    }
+    else if (token.fdv < 500000) {
+      momentum += 5;
+    }
+
+    // ============================================
+    // ACTIVITY: High txns = active interest
+    // ============================================
+    if (totalTxns > 1000) {
+      momentum += 15;
+      signals.push(`🔥 HOT: ${totalTxns.toLocaleString()} txns`);
+    }
     else if (totalTxns > 500) momentum += 10;
-    else if (totalTxns > 100) momentum += 5;
+    else if (totalTxns > 200) momentum += 5;
+    else if (totalTxns < 50) {
+      momentum -= 10; // Low activity = dead
+    }
+
+    // ============================================
+    // REVERSAL WARNING: Big 24h gain + negative 1h = dump
+    // ============================================
+    if (token.priceChange24h > 200 && token.priceChange1h < 0) {
+      momentum -= 20;
+      signals.push(`⛔ REVERSAL: Pumped ${token.priceChange24h.toFixed(0)}% then dumped`);
+    }
 
     // Liquidity Score (0-100)
     let liquidity = 0;
@@ -410,34 +467,18 @@ export class DiscoveryEngine {
     risk = Math.max(0, Math.min(100, risk));
     confidence = Math.max(0, Math.min(100, confidence));
 
-    // Composite score (weighted)
+    // Composite score (weighted for PRE-PUMP detection)
+    // Momentum is king for catching pumps early
     const composite = Math.round(
-      momentum * 0.35 +
-      liquidity * 0.20 +
-      risk * 0.30 +
-      confidence * 0.15
+      momentum * 0.50 +     // Momentum most important
+      risk * 0.25 +         // Safety second
+      liquidity * 0.15 +    // Liquidity for exit ability
+      confidence * 0.10    // Data quality
     );
 
-    // MARKET CAP - Pump potential signals
-    if (token.fdv < 50000) {
-      signals.push(`💎 Gem hunter: $${(token.fdv / 1000).toFixed(0)}K mcap`);
-    }
-    else if (token.fdv < 100000) {
-      signals.push(`🎯 Micro cap $${(token.fdv / 1000).toFixed(0)}K - 100x potential`);
-    }
-    else if (token.fdv < 250000) {
-      signals.push(`🎯 Ultra low $${(token.fdv / 1000).toFixed(0)}K - 50x potential`);
-    }
-    else if (token.fdv < 500000) {
-      signals.push(`💰 Low cap $${(token.fdv / 1000).toFixed(0)}K - 20x potential`);
-    }
-    else if (token.fdv < 1000000) {
-      signals.push(`📊 Sub-$1M cap - 10x potential`);
-    }
-
-    // PUMP TIMING SIGNAL
-    if (token.priceChange1h > 5 && token.priceChange1h < 30 && buyRatio > 0.6 && volumeRatio > 0.3) {
-      signals.push(`⏰ Prime entry window - pump forming`);
+    // PRIME SIGNAL: Best possible setup
+    if (momentum >= 70 && buyRatio > 0.55 && token.priceChange1h > 0 && token.priceChange1h < 50 && token.fdv < 500000) {
+      signals.unshift(`🚨 PRIME SIGNAL: High confidence pre-pump setup`);
     }
 
     return { 
