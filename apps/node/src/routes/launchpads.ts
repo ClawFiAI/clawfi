@@ -286,10 +286,72 @@ export async function registerLaunchpadRoutes(fastify: FastifyInstance): Promise
   // ============================================
 
   const CLANKER_API = 'https://www.clanker.world/api';
+  const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex';
+
+  // Cache for market data (5 minute TTL)
+  const marketDataCache = new Map<string, { data: unknown; timestamp: number }>();
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  async function getMarketData(addresses: string[]): Promise<Map<string, unknown>> {
+    const result = new Map<string, unknown>();
+    const toFetch: string[] = [];
+
+    // Check cache first
+    for (const addr of addresses) {
+      const cached = marketDataCache.get(addr.toLowerCase());
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        result.set(addr.toLowerCase(), cached.data);
+      } else {
+        toFetch.push(addr);
+      }
+    }
+
+    // Fetch missing data in batches of 30 (DexScreener limit)
+    if (toFetch.length > 0) {
+      const batches = [];
+      for (let i = 0; i < toFetch.length; i += 30) {
+        batches.push(toFetch.slice(i, i + 30));
+      }
+
+      await Promise.all(batches.map(async (batch) => {
+        try {
+          const response = await fetch(`${DEXSCREENER_API}/tokens/${batch.join(',')}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.pairs) {
+              // Group by base token address
+              const byToken = new Map<string, unknown>();
+              for (const pair of data.pairs) {
+                const addr = pair.baseToken?.address?.toLowerCase();
+                if (addr && !byToken.has(addr)) {
+                  byToken.set(addr, {
+                    marketCap: pair.fdv,
+                    price: parseFloat(pair.priceUsd || '0'),
+                    priceChange24h: pair.priceChange?.h24,
+                    volume24h: pair.volume?.h24,
+                    liquidity: pair.liquidity?.usd,
+                  });
+                }
+              }
+              // Cache and add to result
+              for (const [addr, market] of byToken) {
+                marketDataCache.set(addr, { data: market, timestamp: Date.now() });
+                result.set(addr, market);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('DexScreener fetch error:', err);
+        }
+      }));
+    }
+
+    return result;
+  }
 
   /**
    * GET /launchpads/clanker/tokens
-   * Proxy to Clanker API - get paginated tokens
+   * Proxy to Clanker API - get paginated tokens with market data
    */
   fastify.get('/launchpads/clanker/tokens', async (request: FastifyRequest<{ Querystring: Record<string, string> }>, reply: FastifyReply) => {
     try {
@@ -304,6 +366,21 @@ export async function registerLaunchpadRoutes(fastify: FastifyInstance): Promise
       }
 
       const data = await response.json();
+
+      // Enrich with market data from DexScreener
+      if (data.data && Array.isArray(data.data)) {
+        const addresses = data.data.map((t: { contract_address: string }) => t.contract_address).filter(Boolean);
+        const marketData = await getMarketData(addresses);
+
+        for (const token of data.data) {
+          const market = marketData.get(token.contract_address?.toLowerCase());
+          if (market) {
+            token.related = token.related || {};
+            token.related.market = market;
+          }
+        }
+      }
+
       return data;
     } catch (error) {
       console.error('Clanker proxy error:', error);
