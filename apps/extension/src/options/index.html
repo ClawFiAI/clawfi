@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ClawFi Options</title>
+  <title>ClawFi Settings</title>
   <style>
     /* iOS Liquid Glass Design System */
     :root {
@@ -89,7 +89,6 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 28px;
       border: 1px solid rgba(255, 255, 255, 0.2);
       position: relative;
       overflow: hidden;
@@ -153,6 +152,15 @@
       margin-bottom: 20px;
       font-weight: 600;
       position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .section-title svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent-blue);
     }
     
     .form-group {
@@ -416,7 +424,6 @@
     }
     
     .capability-icon {
-      font-size: 22px;
       width: 40px;
       height: 40px;
       display: flex;
@@ -425,6 +432,12 @@
       background: rgba(10, 132, 255, 0.15);
       border-radius: 10px;
       flex-shrink: 0;
+      color: var(--accent-blue);
+    }
+    
+    .capability-icon svg {
+      width: 22px;
+      height: 22px;
     }
     
     .capability-info {
@@ -443,6 +456,43 @@
       font-size: 12px;
       color: rgba(255, 255, 255, 0.5);
     }
+    
+    /* Quick Links */
+    .quick-links {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    
+    .quick-link {
+      flex: 1;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      text-decoration: none;
+      text-align: center;
+      color: white;
+      transition: all 0.2s;
+    }
+    
+    .quick-link:hover {
+      background: rgba(10, 132, 255, 0.15);
+      border-color: rgba(10, 132, 255, 0.3);
+    }
+    
+    .quick-link svg {
+      width: 24px;
+      height: 24px;
+      margin: 0 auto 6px;
+      color: var(--accent-blue);
+    }
+    
+    .quick-link span {
+      display: block;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+    }
   </style>
 </head>
 <body>
@@ -459,23 +509,23 @@
     
     <form id="settings-form">
       <div class="card">
-        <div class="section-title">Connection</div>
-        
-        <div class="form-group">
-          <label for="nodeUrl">Node URL</label>
-          <input type="text" id="nodeUrl" placeholder="https://api.clawfi.ai" />
-          <div class="help-text">URL of your ClawFi node API</div>
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          API Configuration
         </div>
         
         <div class="form-group">
-          <label for="authToken">Auth Token</label>
-          <input type="password" id="authToken" placeholder="Your JWT token from dashboard" />
-          <div class="help-text">Login to the dashboard and copy your token from settings</div>
+          <label for="nodeUrl">ClawFi API URL</label>
+          <input type="text" id="nodeUrl" placeholder="https://api.clawfi.ai" />
+          <div class="help-text">Default: https://api.clawfi.ai - change only if self-hosting</div>
         </div>
       </div>
       
       <div class="card">
-        <div class="section-title">Overlays</div>
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Overlays
+        </div>
         
         <div class="toggle-group">
           <div class="toggle-info">
@@ -498,68 +548,94 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+        
+        <div class="toggle-group">
+          <div class="toggle-info">
+            <div class="toggle-label">Solana Overlay</div>
+            <div class="toggle-desc">Show on Pump.fun, Birdeye, Jupiter</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="solanaOverlayEnabled" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
       
       <button type="submit">Save Settings</button>
     </form>
     
     <div id="status" class="status">
-      <span id="status-icon">✓</span>
-      <span id="status-text">Settings saved successfully!</span>
+      <span id="status-icon"></span>
+      <span id="status-text">Settings saved!</span>
     </div>
     
     <div class="divider"></div>
     
     <div class="card">
-      <div class="section-title">Capabilities</div>
+      <div class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
+        Capabilities
+      </div>
       <div class="capabilities-grid">
         <div class="capability-item">
-          <span class="capability-icon">🎯</span>
+          <span class="capability-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
           <div class="capability-info">
-            <div class="capability-title">Injected UI Overlay</div>
-            <div class="capability-desc">Smart overlay injection on supported sites</div>
+            <div class="capability-title">Real-time Token Detection</div>
+            <div class="capability-desc">Automatically detects tokens while browsing</div>
           </div>
         </div>
         <div class="capability-item">
-          <span class="capability-icon">🧩</span>
+          <span class="capability-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </span>
           <div class="capability-info">
-            <div class="capability-title">In-Page Extension Interface</div>
-            <div class="capability-desc">Native-feeling UI components</div>
+            <div class="capability-title">Safety Analysis</div>
+            <div class="capability-desc">Honeypot detection, liquidity checks</div>
           </div>
         </div>
         <div class="capability-item">
-          <span class="capability-icon">⚡</span>
+          <span class="capability-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+          </span>
           <div class="capability-info">
-            <div class="capability-title">Content Script UI Injection</div>
-            <div class="capability-desc">Real-time page augmentation</div>
+            <div class="capability-title">Market Data Overlay</div>
+            <div class="capability-desc">Price, volume, liquidity on every page</div>
           </div>
         </div>
         <div class="capability-item">
-          <span class="capability-icon">📊</span>
+          <span class="capability-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          </span>
           <div class="capability-info">
-            <div class="capability-title">DOM Overlay Toolbar</div>
-            <div class="capability-desc">Floating panels with market data</div>
+            <div class="capability-title">ClawF Gem Detection</div>
+            <div class="capability-desc">AI-powered moonshot identification</div>
           </div>
         </div>
-        <div class="capability-item">
-          <span class="capability-icon">🔮</span>
-          <div class="capability-info">
-            <div class="capability-title">Augmented Page UI</div>
-            <div class="capability-desc">Enhanced token analysis views</div>
-          </div>
-        </div>
-        <div class="capability-item">
-          <span class="capability-icon">🌐</span>
-          <div class="capability-info">
-            <div class="capability-title">Client-side Page Augmentation</div>
-            <div class="capability-desc">Dexscreener market data integration</div>
-          </div>
-        </div>
+      </div>
+      
+      <div class="quick-links">
+        <a href="https://clawfi.ai" target="_blank" class="quick-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="https://dexscreener.com" target="_blank" class="quick-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+          <span>DEXScreener</span>
+        </a>
+        <a href="https://github.com/ClawFiAI/ClawFi" target="_blank" class="quick-link">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          <span>GitHub</span>
+        </a>
       </div>
     </div>
     
     <div class="card">
-      <div class="section-title">Supported Sites</div>
+      <div class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Supported Sites
+      </div>
       <div class="supported-sites">
         <span class="site-badge">Etherscan</span>
         <span class="site-badge">Basescan</span>
@@ -581,8 +657,9 @@
     
     <div class="footer">
       <div class="footer-text">
-        ClawFi v0.4.2 • 
-        <a class="footer-link" href="https://github.com/ClawFiAI/ClawFi" target="_blank">GitHub</a>
+        ClawFi v0.5.0 - 
+        <a class="footer-link" href="https://github.com/ClawFiAI/ClawFi" target="_blank">GitHub</a> -
+        <a class="footer-link" href="https://clawfi.ai" target="_blank">Dashboard</a>
       </div>
     </div>
   </div>

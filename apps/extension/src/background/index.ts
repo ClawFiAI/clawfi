@@ -11,16 +11,16 @@
 
 interface ExtensionSettings {
   nodeUrl: string;
-  authToken: string;
   overlayEnabled: boolean;
   clankerOverlayEnabled: boolean;
+  solanaOverlayEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
   nodeUrl: 'https://api.clawfi.ai',
-  authToken: '',
   overlayEnabled: true,
   clankerOverlayEnabled: true,
+  solanaOverlayEnabled: true,
 };
 
 // Message types
@@ -127,11 +127,6 @@ async function saveSettings(settings: Partial<ExtensionSettings>): Promise<Exten
 // Fetch signals from node API with retry
 async function fetchSignals(token: string, chain?: string, limit?: number, retries = 2): Promise<unknown[]> {
   const settings = await getSettings();
-  
-  if (!settings.authToken) {
-    console.debug('[ClawFi] No auth token configured');
-    return [];
-  }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -144,7 +139,6 @@ async function fetchSignals(token: string, chain?: string, limit?: number, retri
 
       const response = await fetch(`${settings.nodeUrl}/signals/token?${params}`, {
         headers: {
-          Authorization: `Bearer ${settings.authToken}`,
           'Content-Type': 'application/json',
         },
         signal: controller.signal,

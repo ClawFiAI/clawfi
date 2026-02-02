@@ -30,7 +30,6 @@ interface Signal {
 
 interface Settings {
   nodeUrl: string;
-  authToken: string;
   overlayEnabled: boolean;
 }
 
@@ -172,9 +171,7 @@ async function fetchMarketData(token: string, chain?: string, settings?: Setting
     const nodeUrl = settings?.nodeUrl || 'https://api.clawfi.ai';
     const chainParam = chain ? `?chain=${chain}` : '';
     
-    const response = await fetch(`${nodeUrl}/dexscreener/token/${token}${chainParam}`, {
-      headers: settings?.authToken ? { 'Authorization': `Bearer ${settings.authToken}` } : {},
-    });
+    const response = await fetch(`${nodeUrl}/dexscreener/token/${token}${chainParam}`);
     
     if (!response.ok) {
       // Fallback to direct Dexscreener API
@@ -227,9 +224,7 @@ async function fetchMarketData(token: string, chain?: string, settings?: Setting
 async function fetchSafetyData(token: string, chain?: string, settings?: Settings): Promise<SafetyData | null> {
   try {
     const nodeUrl = settings?.nodeUrl || 'https://api.clawfi.ai';
-    const response = await fetch(`${nodeUrl}/analyze/token/${token}${chain ? `?chain=${chain}` : ''}`, {
-      headers: settings?.authToken ? { 'Authorization': `Bearer ${settings.authToken}` } : {},
-    });
+    const response = await fetch(`${nodeUrl}/analyze/token/${token}${chain ? `?chain=${chain}` : ''}`);
     
     if (!response.ok) {
       // Return estimated data if API is not available
@@ -457,7 +452,13 @@ function ClawFiOverlay() {
           {iconUrl ? (
             <img src={iconUrl} alt="ClawFi" style={{ width: '34px', height: '34px', borderRadius: '8px', objectFit: 'contain', position: 'relative', zIndex: 1 }} />
           ) : (
-            <span style={{ fontSize: '28px', position: 'relative', zIndex: 1 }}>🦀</span>
+            <svg viewBox="0 0 100 100" style={{ width: '34px', height: '34px', position: 'relative', zIndex: 1 }}>
+              <circle cx="50" cy="50" r="45" fill="#0A84FF"/>
+              <ellipse cx="35" cy="40" rx="8" ry="10" fill="white"/>
+              <ellipse cx="65" cy="40" rx="8" ry="10" fill="white"/>
+              <circle cx="35" cy="40" r="4" fill="#0A84FF"/>
+              <circle cx="65" cy="40" r="4" fill="#0A84FF"/>
+            </svg>
           )}
           
           {/* Signal badge */}
@@ -560,7 +561,11 @@ function ClawFiOverlay() {
               {iconUrl ? (
                 <img src={iconUrl} alt="" style={{ width: '26px', height: '26px', borderRadius: '6px' }} />
               ) : (
-                <span style={{ fontSize: '22px' }}>🦀</span>
+                <svg viewBox="0 0 100 100" style={{ width: '26px', height: '26px' }}>
+                  <circle cx="50" cy="50" r="45" fill="white"/>
+                  <ellipse cx="35" cy="40" rx="8" ry="10" fill="#0A84FF"/>
+                  <ellipse cx="65" cy="40" rx="8" ry="10" fill="#0A84FF"/>
+                </svg>
               )}
               <span style={{ fontWeight: '700', color: 'white', fontSize: '17px', letterSpacing: '-0.4px' }}>
                 ClawFi
@@ -1039,7 +1044,7 @@ function ClawFiOverlay() {
             }}
           >
             <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-              ClawFi v0.4.0
+              ClawFi v0.5.0
             </span>
             <button
               onClick={() => chrome.runtime.openOptionsPage()}
@@ -1050,9 +1055,16 @@ function ClawFiOverlay() {
                 fontSize: '12px',
                 cursor: 'pointer',
                 fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              Settings ⚙️
+              <svg viewBox="0 0 24 24" style={{ width: '14px', height: '14px' }} fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              Settings
             </button>
           </div>
         </div>

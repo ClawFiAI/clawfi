@@ -1,20 +1,20 @@
 /**
- * ClawFi Options Page Script
- * Handles settings persistence with local storage priority
+ * ClawFi Options Page Script v0.5.0
+ * Simplified settings - no auth required
  */
 
 var defaultSettings = {
   nodeUrl: 'https://api.clawfi.ai',
-  authToken: '',
   overlayEnabled: true,
   clankerOverlayEnabled: true,
+  solanaOverlayEnabled: true,
 };
 
 var form = document.getElementById('settings-form');
 var nodeUrlInput = document.getElementById('nodeUrl');
-var authTokenInput = document.getElementById('authToken');
 var overlayEnabledInput = document.getElementById('overlayEnabled');
 var clankerOverlayEnabledInput = document.getElementById('clankerOverlayEnabled');
+var solanaOverlayEnabledInput = document.getElementById('solanaOverlayEnabled');
 var statusEl = document.getElementById('status');
 var statusIconEl = document.getElementById('status-icon');
 var statusTextEl = document.getElementById('status-text');
@@ -29,23 +29,24 @@ function showStatus(type, icon, text) {
 }
 
 function applySettings(settings) {
-  console.log('[ClawFi Options] Applying settings:', { ...settings, authToken: settings.authToken ? '***' : '' });
+  console.log('[ClawFi Options] Applying settings:', settings);
   nodeUrlInput.value = settings.nodeUrl || defaultSettings.nodeUrl;
-  authTokenInput.value = settings.authToken || '';
   overlayEnabledInput.checked = settings.overlayEnabled !== false;
   clankerOverlayEnabledInput.checked = settings.clankerOverlayEnabled !== false;
+  if (solanaOverlayEnabledInput) {
+    solanaOverlayEnabledInput.checked = settings.solanaOverlayEnabled !== false;
+  }
 }
 
 function loadSettings() {
   console.log('[ClawFi Options] Loading settings...');
-  // Try local storage first (more reliable for large tokens)
   chrome.storage.local.get('settings', function(localResult) {
     var error = chrome.runtime.lastError;
     if (error) {
       console.error('[ClawFi Options] Local storage error:', error);
     }
     
-    if (localResult && localResult.settings && localResult.settings.authToken) {
+    if (localResult && localResult.settings) {
       console.log('[ClawFi Options] Loaded from local storage');
       applySettings(localResult.settings);
     } else {
@@ -73,35 +74,34 @@ function saveSettings(e) {
   
   var settings = {
     nodeUrl: nodeUrlInput.value.trim() || defaultSettings.nodeUrl,
-    authToken: authTokenInput.value.trim(),
     overlayEnabled: overlayEnabledInput.checked,
     clankerOverlayEnabled: clankerOverlayEnabledInput.checked,
+    solanaOverlayEnabled: solanaOverlayEnabledInput ? solanaOverlayEnabledInput.checked : true,
   };
   
-  console.log('[ClawFi Options] Saving settings...', { ...settings, authToken: settings.authToken ? '***' : '' });
+  console.log('[ClawFi Options] Saving settings...', settings);
   
-  // Save to local storage first (more reliable, no size limits for tokens)
+  // Save to local storage
   chrome.storage.local.set({ settings: settings }, function() {
     var localError = chrome.runtime.lastError;
     if (localError) {
       console.error('[ClawFi Options] Local save error:', localError);
-      showStatus('error', '✗', 'Error saving: ' + localError.message);
+      showStatus('error', '!', 'Error saving: ' + localError.message);
       return;
     }
     
     console.log('[ClawFi Options] Saved to local storage');
     
-    // Also save to sync (but don't fail if it errors due to size)
+    // Also save to sync
     chrome.storage.sync.set({ settings: settings }, function() {
       var syncError = chrome.runtime.lastError;
       if (syncError) {
         console.warn('[ClawFi Options] Sync save warning:', syncError);
-        // Still show success since local save worked
       } else {
         console.log('[ClawFi Options] Saved to sync storage');
       }
       
-      showStatus('success', '✓', 'Settings saved!');
+      showStatus('success', '', 'Settings saved!');
       
       // Notify background script
       try {
@@ -122,24 +122,7 @@ function saveSettings(e) {
   return false;
 }
 
-// Also save when input loses focus (in case form isn't submitted)
-function saveOnBlur() {
-  var currentToken = authTokenInput.value.trim();
-  if (currentToken) {
-    console.log('[ClawFi Options] Auto-saving on blur...');
-    var settings = {
-      nodeUrl: nodeUrlInput.value.trim() || defaultSettings.nodeUrl,
-      authToken: currentToken,
-      overlayEnabled: overlayEnabledInput.checked,
-      clankerOverlayEnabled: clankerOverlayEnabledInput.checked,
-    };
-    chrome.storage.local.set({ settings: settings });
-  }
-}
-
 document.addEventListener('DOMContentLoaded', function() {
   loadSettings();
   form.addEventListener('submit', saveSettings);
-  authTokenInput.addEventListener('blur', saveOnBlur);
-  nodeUrlInput.addEventListener('blur', saveOnBlur);
 });
