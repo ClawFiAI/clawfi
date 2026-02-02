@@ -23,6 +23,7 @@ import { registerMetricsRoutes } from './routes/metrics.js';
 import { registerAgentRoutes } from './routes/agent.js';
 import { registerDevRoutes } from './routes/dev.js';
 import { dexscreenerRoutes } from './routes/dexscreener.js';
+import clawfRoutes from './routes/clawf.js';
 import { registerWebSocket } from './ws/index.js';
 import { AuditService } from './services/audit.js';
 import { RiskEngine } from './services/risk.js';
@@ -213,6 +214,7 @@ async function main() {
   await registerMetricsRoutes(fastify);
   await registerAgentRoutes(fastify);
   await fastify.register(dexscreenerRoutes);
+  await fastify.register(clawfRoutes);
 
   // Dev routes (only in development)
   if (config.devMode) {
