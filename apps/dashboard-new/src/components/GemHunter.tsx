@@ -8,6 +8,12 @@ interface GemPerformance {
 	detectedAt: string;
 }
 
+interface SocialSignals {
+	mentionCount?: number;
+	mentionVelocity?: number;
+	spikeDetected?: boolean;
+}
+
 interface GemCandidate {
 	address: string;
 	symbol: string;
@@ -30,6 +36,7 @@ interface GemCandidate {
 	conditionsPassed: number;
 	conditionsTotal: number;
 	performance?: GemPerformance | null;
+	socialSignals?: SocialSignals;
 }
 
 interface GemStats {
@@ -167,11 +174,16 @@ export default function GemHunter() {
 				<div>
 					<div className="flex items-center gap-3">
 						<div className="relative">
-							<div className="w-3 h-3 bg-emerald-500 rounded-full absolute -top-1 -right-1 animate-pulse"></div>
+							<div className={`w-3 h-3 rounded-full absolute -top-1 -right-1 ${loading ? 'bg-yellow-500 animate-ping' : 'bg-emerald-500 animate-pulse'}`}></div>
 							<span className="text-3xl">🦀</span>
 						</div>
 						<div>
-							<h2 className="text-xl font-bold text-white">ClawF Finds</h2>
+							<h2 className="text-xl font-bold text-white flex items-center gap-2">
+								ClawF Finds
+								{loading && gems.length > 0 && (
+									<span className="text-xs font-normal text-yellow-400 animate-pulse">updating...</span>
+								)}
+							</h2>
 							<p className="text-sm text-gray-400">
 								{gems.length > 0 ? `${gems.length} opportunities detected` : 'Scanning...'}
 								{lastUpdated && ` • ${lastUpdated.toLocaleTimeString()}`}
@@ -251,11 +263,21 @@ export default function GemHunter() {
 								<div className="p-4">
 									{/* Header */}
 									<div className="flex items-start justify-between mb-3">
-										<div className="flex items-center gap-2">
+										<div className="flex items-center gap-2 flex-wrap">
 											<span className="text-2xl font-bold text-white">${gem.symbol}</span>
 											<span className="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded uppercase">
 												{gem.chain}
 											</span>
+											{gem.socialSignals && gem.socialSignals.mentionCount && gem.socialSignals.mentionCount > 0 && (
+												<span className={`px-2 py-0.5 text-xs rounded flex items-center gap-1 ${
+													gem.socialSignals.spikeDetected 
+														? 'bg-sky-500/30 text-sky-300 border border-sky-500/50' 
+														: 'bg-gray-700 text-gray-300'
+												}`}>
+													𝕏 {gem.socialSignals.mentionCount}
+													{gem.socialSignals.spikeDetected && ' 🔥'}
+												</span>
+											)}
 										</div>
 										<div className={`px-3 py-1 rounded-full text-xs font-bold ${signal.class}`}>
 											{signal.text}
