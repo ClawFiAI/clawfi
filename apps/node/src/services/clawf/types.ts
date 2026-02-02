@@ -260,24 +260,29 @@ export interface ClawFConfig {
 }
 
 export const DEFAULT_CONFIG: ClawFConfig = {
-  minLiquidity: 10000,
-  minConditionsToPass: 3,
-  volumeSpikeThreshold: 2,
-  buyPressureThreshold: 0.6,
+  // PRE-PUMP detection settings
+  minLiquidity: 10000,           // Min $10K liquidity for safety
+  minConditionsToPass: 4,        // Require 4/7 conditions for higher accuracy
+  volumeSpikeThreshold: 1.5,     // Volume building (not spiked yet)
+  buyPressureThreshold: 0.55,    // Buy dominance threshold
   
-  profitTargets: [2, 5, 10],
-  trailingStopPercent: 25,
-  trailingStopActivation: 2,
-  liquidityDropThreshold: 40,
-  liquidityDropWindow: 600, // 10 minutes
+  // Exit targets (for tracking)
+  profitTargets: [2, 5, 10],     // Take profit at 2x, 5x, 10x
+  trailingStopPercent: 25,       // Trail 25% below peak after 2x
+  trailingStopActivation: 2,     // Activate trailing after 2x
+  liquidityDropThreshold: 40,    // Exit if liquidity drops 40%
+  liquidityDropWindow: 600,      // Within 10 minutes
   
-  oldWalletMinAge: 15552000, // 6 months
+  // Wallet intelligence
+  oldWalletMinAge: 15552000,     // 6 months for "old wallet"
   oldWalletMinTxns: 100,
   oldWalletMinContracts: 20,
   
-  socialSpikeThreshold: 5,
-  socialSpamThreshold: 0.3,
+  // Social signals
+  socialSpikeThreshold: 5,       // 5x mention increase
+  socialSpamThreshold: 0.3,      // >30% repeat posters = spam
   
+  // Rate limiting
   apiRateLimitPerMinute: 60,
   cacheTimeSeconds: 30,
 };

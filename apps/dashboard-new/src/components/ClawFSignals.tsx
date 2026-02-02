@@ -159,9 +159,9 @@ export default function ClawFSignals() {
 				<div className="flex items-center gap-3">
 					<img src="/logo-square.png" alt="ClawFi" className="w-8 h-8 rounded-lg" />
 					<div>
-						<h2 className="text-lg font-semibold text-white">ClawF Buy Signals</h2>
+						<h2 className="text-lg font-semibold text-white">Pre-Pump Alerts</h2>
 						<p className="text-sm text-gray-400">
-							{candidates.length} high-momentum tokens detected
+							{candidates.length} tokens showing accumulation patterns
 							{lastUpdated && ` • Updated ${new Date(lastUpdated).toLocaleTimeString()}`}
 						</p>
 					</div>
@@ -193,8 +193,8 @@ export default function ClawFSignals() {
 			{candidates.length === 0 ? (
 				<div className="bg-gray-800 rounded-xl border border-gray-700 p-8 text-center">
 					<span className="text-5xl mb-4 block">🔍</span>
-					<h3 className="text-lg font-medium text-white mb-2">No signals right now</h3>
-					<p className="text-gray-400">ClawF is scanning for high-momentum tokens. Check back soon!</p>
+					<h3 className="text-lg font-medium text-white mb-2">Scanning for opportunities</h3>
+					<p className="text-gray-400">ClawF is analyzing accumulation patterns and whale activity. Check back soon!</p>
 				</div>
 			) : (
 				<div className="grid gap-4">
@@ -337,8 +337,8 @@ export default function ClawFSignals() {
 			{/* Disclaimer */}
 			<div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700 text-xs text-gray-500">
 				<p>
-					⚠️ <strong>Not financial advice.</strong> ClawF signals are based on on-chain data analysis and momentum indicators.
-					Always do your own research. Crypto trading carries significant risk of loss.
+					⚠️ <strong>Not financial advice.</strong> ClawF detects accumulation patterns and pre-pump signals based on on-chain data.
+					Predictions are for the next ~4 hours. Always do your own research. Crypto trading carries significant risk of loss.
 				</p>
 			</div>
 		</div>
