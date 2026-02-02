@@ -185,6 +185,34 @@ export interface MoonshotCandidate {
   risk: 'extreme' | 'high' | 'medium';
 }
 
+export interface TrackedPosition {
+  id: string;
+  symbol: string;
+  address: string;
+  chain: string;
+  entryPrice: number;
+  entryTime: Date;
+  entryLiquidity: number;
+  currentPrice: number;
+  currentLiquidity: number;
+  peakPrice: number;
+  peakMultiple: number;
+  currentMultiple: number;
+  exitSignals: ExitSignal[];
+  status: 'active' | 'exited' | 'rugged';
+}
+
+export interface ExitSignal {
+  type: 'target_hit' | 'rug_warning' | 'momentum_loss' | 'liquidity_drop' | 'peak_reversal';
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  timestamp: Date;
+  data?: Record<string, unknown>;
+}
+
+// In-memory tracking store
+const trackedPositions: Map<string, TrackedPosition> = new Map();
+
 // ============================================
 // AI Service
 // ============================================
@@ -753,6 +781,253 @@ Respond in JSON:
         'Never invest more than you can afford to lose',
       ],
     };
+  }
+
+  // ============================================
+  // Exit Timing & Position Tracking
+  // ============================================
+
+  /**
+   * Track a new position for exit monitoring
+   */
+  async trackPosition(candidate: MoonshotCandidate): Promise<TrackedPosition> {
+    const id = `${candidate.chain}-${candidate.address}`;
+    
+    const position: TrackedPosition = {
+      id,
+      symbol: candidate.symbol,
+      address: candidate.address,
+      chain: candidate.chain,
+      entryPrice: candidate.priceUsd,
+      entryTime: new Date(),
+      entryLiquidity: candidate.liquidity,
+      currentPrice: candidate.priceUsd,
+      currentLiquidity: candidate.liquidity,
+      peakPrice: candidate.priceUsd,
+      peakMultiple: 1,
+      currentMultiple: 1,
+      exitSignals: [],
+      status: 'active',
+    };
+
+    trackedPositions.set(id, position);
+    console.log(`📍 Tracking ${candidate.symbol} at $${candidate.priceUsd}`);
+    
+    return position;
+  }
+
+  /**
+   * Check a position for exit signals
+   */
+  async checkPosition(positionId: string): Promise<TrackedPosition | null> {
+    const position = trackedPositions.get(positionId);
+    if (!position || position.status !== 'active') return position || null;
+
+    // Fetch current data
+    const data = await fetchDexScreener<{ pairs?: DexScreenerPair[] }>(
+      `/latest/dex/tokens/${position.address}`
+    );
+    
+    if (!data?.pairs?.[0]) {
+      position.status = 'rugged';
+      position.exitSignals.push({
+        type: 'rug_warning',
+        message: '🚨 Token data unavailable - possible rug',
+        severity: 'critical',
+        timestamp: new Date(),
+      });
+      return position;
+    }
+
+    const pair = data.pairs[0];
+    const currentPrice = parseFloat(pair.priceUsd || '0');
+    const currentLiquidity = pair.liquidity?.usd || 0;
+    
+    // Update position
+    position.currentPrice = currentPrice;
+    position.currentLiquidity = currentLiquidity;
+    position.currentMultiple = currentPrice / position.entryPrice;
+    
+    // Track peak
+    if (position.currentMultiple > position.peakMultiple) {
+      position.peakPrice = currentPrice;
+      position.peakMultiple = position.currentMultiple;
+    }
+
+    // Clear old signals and check for new ones
+    position.exitSignals = [];
+
+    // EXIT SIGNAL 1: Target hit alerts
+    if (position.currentMultiple >= 10) {
+      position.exitSignals.push({
+        type: 'target_hit',
+        message: '💎🔥 10X ACHIEVED! Consider taking profits!',
+        severity: 'critical',
+        timestamp: new Date(),
+        data: { multiple: position.currentMultiple },
+      });
+    } else if (position.currentMultiple >= 5) {
+      position.exitSignals.push({
+        type: 'target_hit',
+        message: '🔥 5X reached! Consider taking partial profits',
+        severity: 'warning',
+        timestamp: new Date(),
+        data: { multiple: position.currentMultiple },
+      });
+    } else if (position.currentMultiple >= 2) {
+      position.exitSignals.push({
+        type: 'target_hit',
+        message: '🚀 2X reached - you\'re in profit!',
+        severity: 'info',
+        timestamp: new Date(),
+        data: { multiple: position.currentMultiple },
+      });
+    }
+
+    // EXIT SIGNAL 2: Liquidity drop (rug warning)
+    const liquidityDropPct = ((position.entryLiquidity - currentLiquidity) / position.entryLiquidity) * 100;
+    if (currentLiquidity < 1000) {
+      position.status = 'rugged';
+      position.exitSignals.push({
+        type: 'rug_warning',
+        message: '🚨 LIQUIDITY GONE! Token is rugged!',
+        severity: 'critical',
+        timestamp: new Date(),
+        data: { liquidity: currentLiquidity },
+      });
+    } else if (liquidityDropPct > 50) {
+      position.exitSignals.push({
+        type: 'liquidity_drop',
+        message: `⚠️ Liquidity dropped ${liquidityDropPct.toFixed(0)}%! Exit risk HIGH`,
+        severity: 'critical',
+        timestamp: new Date(),
+        data: { dropPct: liquidityDropPct, current: currentLiquidity },
+      });
+    } else if (liquidityDropPct > 25) {
+      position.exitSignals.push({
+        type: 'liquidity_drop',
+        message: `⚠️ Liquidity dropped ${liquidityDropPct.toFixed(0)}% - watch closely`,
+        severity: 'warning',
+        timestamp: new Date(),
+        data: { dropPct: liquidityDropPct, current: currentLiquidity },
+      });
+    }
+
+    // EXIT SIGNAL 3: Peak reversal (dropped from peak)
+    if (position.peakMultiple >= 2) {
+      const dropFromPeak = ((position.peakMultiple - position.currentMultiple) / position.peakMultiple) * 100;
+      
+      if (dropFromPeak > 50) {
+        position.exitSignals.push({
+          type: 'peak_reversal',
+          message: `📉 DOWN ${dropFromPeak.toFixed(0)}% FROM PEAK! Was ${position.peakMultiple.toFixed(1)}x, now ${position.currentMultiple.toFixed(1)}x`,
+          severity: 'critical',
+          timestamp: new Date(),
+          data: { peak: position.peakMultiple, current: position.currentMultiple, dropPct: dropFromPeak },
+        });
+      } else if (dropFromPeak > 25) {
+        position.exitSignals.push({
+          type: 'peak_reversal',
+          message: `📉 Dropped ${dropFromPeak.toFixed(0)}% from ${position.peakMultiple.toFixed(1)}x peak`,
+          severity: 'warning',
+          timestamp: new Date(),
+          data: { peak: position.peakMultiple, current: position.currentMultiple, dropPct: dropFromPeak },
+        });
+      }
+    }
+
+    return position;
+  }
+
+  /**
+   * Get all tracked positions with live updates
+   */
+  async getTrackedPositions(): Promise<TrackedPosition[]> {
+    const positions: TrackedPosition[] = [];
+    
+    for (const [id] of trackedPositions) {
+      const updated = await this.checkPosition(id);
+      if (updated) positions.push(updated);
+    }
+    
+    return positions.sort((a, b) => b.currentMultiple - a.currentMultiple);
+  }
+
+  /**
+   * Smart exit recommendation based on position state
+   */
+  getExitRecommendation(position: TrackedPosition): {
+    action: 'hold' | 'take_partial' | 'exit_now' | 'rugged';
+    reason: string;
+    urgency: 'low' | 'medium' | 'high' | 'critical';
+  } {
+    if (position.status === 'rugged') {
+      return { action: 'rugged', reason: 'Token has been rugged', urgency: 'critical' };
+    }
+
+    const hasCriticalSignal = position.exitSignals.some(s => s.severity === 'critical');
+    const hasWarningSignal = position.exitSignals.some(s => s.severity === 'warning');
+
+    // If we hit 10x, recommend exit
+    if (position.currentMultiple >= 10) {
+      return { 
+        action: 'exit_now', 
+        reason: '10X achieved - take profits!', 
+        urgency: 'high' 
+      };
+    }
+
+    // If liquidity is dropping critically
+    if (position.exitSignals.some(s => s.type === 'liquidity_drop' && s.severity === 'critical')) {
+      return { 
+        action: 'exit_now', 
+        reason: 'Liquidity dropping fast - rug risk!', 
+        urgency: 'critical' 
+      };
+    }
+
+    // If we're 5x+ and dropping from peak
+    if (position.currentMultiple >= 5 && position.peakMultiple > position.currentMultiple * 1.25) {
+      return { 
+        action: 'exit_now', 
+        reason: `Peaked at ${position.peakMultiple.toFixed(1)}x, now falling`, 
+        urgency: 'high' 
+      };
+    }
+
+    // If we're 2x+ and have warning signals
+    if (position.currentMultiple >= 2 && hasWarningSignal) {
+      return { 
+        action: 'take_partial', 
+        reason: 'In profit but warning signs - secure some gains', 
+        urgency: 'medium' 
+      };
+    }
+
+    // If we're in profit with no warnings
+    if (position.currentMultiple >= 2) {
+      return { 
+        action: 'take_partial', 
+        reason: `${position.currentMultiple.toFixed(1)}x - consider taking some profits`, 
+        urgency: 'low' 
+      };
+    }
+
+    // Default: hold
+    return { 
+      action: 'hold', 
+      reason: position.currentMultiple >= 1 
+        ? `Currently ${position.currentMultiple.toFixed(2)}x - wait for target` 
+        : `Down ${((1 - position.currentMultiple) * 100).toFixed(0)}% - hold or cut losses`,
+      urgency: hasCriticalSignal ? 'high' : 'low' 
+    };
+  }
+
+  /**
+   * Remove a position from tracking
+   */
+  stopTracking(positionId: string): boolean {
+    return trackedPositions.delete(positionId);
   }
 
   /**

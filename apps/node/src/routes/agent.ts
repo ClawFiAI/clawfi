@@ -11,7 +11,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AIService, type TokenData } from '../services/ai.js';
+import { AIService, type TokenData, type MoonshotCandidate } from '../services/ai.js';
 
 // ============================================
 // Command Schemas
@@ -102,6 +102,23 @@ function parseCommand(input: string): ParsedCommand {
     return {
       action: 'moonshots',
       target: parts[1], // optional chain filter
+      args: {},
+    };
+  }
+
+  // Position tracking commands
+  if (action === 'track') {
+    return {
+      action: 'track',
+      target: parts[1], // 'all' or nothing
+      args: {},
+    };
+  }
+
+  if (action === 'positions' || action === 'exits' || action === 'portfolio') {
+    return {
+      action: 'positions',
+      target: undefined,
       args: {},
     };
   }
@@ -299,6 +316,10 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
                 'moonshots - Find potential 10x tokens',
                 'gems - Same as moonshots',
                 '10x - Same as moonshots',
+                '',
+                '--- Exit Timing ---',
+                'track all - Start tracking moonshot picks',
+                'positions - Check positions & exit signals',
               ],
             },
           };
@@ -437,6 +458,77 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
               success: false,
               action: 'moonshots',
               message: err instanceof Error ? err.message : 'Moonshot finder failed',
+            };
+          }
+          break;
+
+        case 'track':
+          try {
+            if (parsed.target === 'all') {
+              // Track all current moonshots
+              const advice = await aiService.getMoonshotAdvice();
+              const tracked = [];
+              for (const pick of advice.topPicks.slice(0, 5)) {
+                await aiService.trackPosition(pick);
+                tracked.push(pick.symbol);
+              }
+              commandResult = {
+                success: true,
+                action: 'track',
+                message: `📍 Now tracking ${tracked.length} positions for exit signals:\n${tracked.join(', ')}\n\nUse "positions" to check status and exit recommendations.`,
+                data: { tracked },
+              };
+            } else {
+              commandResult = {
+                success: true,
+                action: 'track',
+                message: 'Usage: track all - Start tracking current moonshot picks',
+              };
+            }
+          } catch (err) {
+            commandResult = {
+              success: false,
+              action: 'track',
+              message: err instanceof Error ? err.message : 'Tracking failed',
+            };
+          }
+          break;
+
+        case 'positions':
+          try {
+            const positions = await aiService.getTrackedPositions();
+            if (positions.length === 0) {
+              commandResult = {
+                success: true,
+                action: 'positions',
+                message: '📊 No positions being tracked.\n\nUse "track all" after "moonshots" to start tracking.',
+                data: { positions: [] },
+              };
+            } else {
+              const positionList = positions.map(p => {
+                const rec = aiService.getExitRecommendation(p);
+                const emoji = p.status === 'rugged' ? '💀' : 
+                             p.currentMultiple >= 5 ? '🔥' :
+                             p.currentMultiple >= 2 ? '🚀' :
+                             p.currentMultiple >= 1 ? '📈' : '📉';
+                const signals = p.exitSignals.length > 0 
+                  ? `\n   ⚡ ${p.exitSignals[0].message}`
+                  : '';
+                return `${emoji} ${p.symbol}: ${p.currentMultiple.toFixed(2)}x (peak: ${p.peakMultiple.toFixed(2)}x)\n   💡 ${rec.action.toUpperCase()}: ${rec.reason}${signals}`;
+              }).join('\n\n');
+              
+              commandResult = {
+                success: true,
+                action: 'positions',
+                message: `📊 TRACKED POSITIONS\n\n${positionList}`,
+                data: { positions },
+              };
+            }
+          } catch (err) {
+            commandResult = {
+              success: false,
+              action: 'positions',
+              message: err instanceof Error ? err.message : 'Failed to get positions',
             };
           }
           break;
@@ -812,6 +904,190 @@ export async function registerAgentRoutes(fastify: FastifyInstance): Promise<voi
           code: 'AI_ERROR',
           message: error instanceof Error ? error.message : 'Moonshot advice failed',
         },
+      });
+    }
+  });
+
+  // ============================================
+  // Position Tracking & Exit Timing Routes
+  // ============================================
+
+  /**
+   * POST /agent/ai/track
+   * Start tracking a moonshot position for exit signals
+   */
+  fastify.post('/agent/ai/track', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const schema = z.object({
+      symbol: z.string(),
+      address: z.string(),
+      chain: z.string(),
+      entryPrice: z.number(),
+      liquidity: z.number(),
+    });
+
+    const result = schema.safeParse(request.body);
+    if (!result.success) {
+      return reply.status(400).send({
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid request body' },
+      });
+    }
+
+    try {
+      const candidate: MoonshotCandidate = {
+        symbol: result.data.symbol,
+        name: result.data.symbol,
+        address: result.data.address,
+        chain: result.data.chain,
+        priceUsd: result.data.entryPrice,
+        priceChange1h: 0,
+        priceChange24h: 0,
+        volume24h: 0,
+        liquidity: result.data.liquidity,
+        fdv: 0,
+        buys24h: 0,
+        sells24h: 0,
+        moonshotScore: 0,
+        signals: [],
+        risk: 'extreme',
+      };
+
+      const position = await aiService.trackPosition(candidate);
+      
+      return {
+        success: true,
+        data: position,
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'TRACKING_ERROR', message: error instanceof Error ? error.message : 'Failed to track position' },
+      });
+    }
+  });
+
+  /**
+   * GET /agent/ai/positions
+   * Get all tracked positions with live exit signals
+   */
+  fastify.get('/agent/ai/positions', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    try {
+      const positions = await aiService.getTrackedPositions();
+      
+      // Add exit recommendations to each position
+      const withRecommendations = positions.map(pos => ({
+        ...pos,
+        recommendation: aiService.getExitRecommendation(pos),
+      }));
+
+      return {
+        success: true,
+        data: {
+          count: positions.length,
+          positions: withRecommendations,
+        },
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'POSITIONS_ERROR', message: error instanceof Error ? error.message : 'Failed to get positions' },
+      });
+    }
+  });
+
+  /**
+   * GET /agent/ai/positions/:id
+   * Check a specific position for exit signals
+   */
+  fastify.get('/agent/ai/positions/:id', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const { id } = request.params as { id: string };
+
+    try {
+      const position = await aiService.checkPosition(id);
+      
+      if (!position) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Position not found' },
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          position,
+          recommendation: aiService.getExitRecommendation(position),
+        },
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'CHECK_ERROR', message: error instanceof Error ? error.message : 'Failed to check position' },
+      });
+    }
+  });
+
+  /**
+   * DELETE /agent/ai/positions/:id
+   * Stop tracking a position
+   */
+  fastify.delete('/agent/ai/positions/:id', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const { id } = request.params as { id: string };
+    const removed = aiService.stopTracking(id);
+
+    return {
+      success: removed,
+      message: removed ? 'Position removed from tracking' : 'Position not found',
+    };
+  });
+
+  /**
+   * POST /agent/ai/moonshots/track-all
+   * Find moonshots and automatically track the top picks
+   */
+  fastify.post('/agent/ai/moonshots/track-all', async (request, reply) => {
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    try {
+      const advice = await aiService.getMoonshotAdvice();
+      const tracked = [];
+
+      for (const pick of advice.topPicks.slice(0, 5)) {
+        const position = await aiService.trackPosition(pick);
+        tracked.push({
+          symbol: position.symbol,
+          chain: position.chain,
+          entryPrice: position.entryPrice,
+          liquidity: position.entryLiquidity,
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          message: `Now tracking ${tracked.length} moonshot positions`,
+          tracked,
+          analysis: advice.analysis,
+          warnings: advice.warnings,
+        },
+      };
+    } catch (error) {
+      return reply.status(500).send({
+        success: false,
+        error: { code: 'TRACK_ALL_ERROR', message: error instanceof Error ? error.message : 'Failed to track moonshots' },
       });
     }
   });
