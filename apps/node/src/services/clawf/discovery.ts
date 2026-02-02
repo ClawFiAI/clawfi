@@ -19,6 +19,7 @@ import {
   DEFAULT_CONFIG,
   TokenFlag,
 } from './types.js';
+import { getSocialSignals, getSocialBoost, formatSocialSignal, hasSocialValidation } from './social.js';
 
 // ============================================
 // API Endpoints
@@ -248,6 +249,7 @@ export class DiscoveryEngine {
   /**
    * Evaluate token specifically for 100x GEM potential
    * Different criteria than regular scan - focused on ultra-early, ultra-low mcap
+   * Now includes Twitter/X social validation
    */
   private async evaluateGemCandidate(token: Partial<TokenCandidate>): Promise<DiscoveryResult> {
     const conditions: DiscoveryCondition[] = [];
@@ -262,6 +264,14 @@ export class DiscoveryEngine {
     const ageHours = candidate.pairCreatedAt 
       ? (Date.now() - new Date(candidate.pairCreatedAt).getTime()) / (1000 * 60 * 60)
       : 999;
+    
+    // Fetch social signals from Twitter/X (async, with caching)
+    const socialSignal = await getSocialSignals(candidate.address, candidate.symbol).catch(() => null);
+    candidate.socialSignals = socialSignal ? {
+      mentionCount: socialSignal.mentionCount,
+      mentionVelocity: socialSignal.mentionVelocity,
+      spikeDetected: socialSignal.spikeDetected,
+    } : undefined;
 
     // ═══════════════════════════════════════════════════════════════
     // GEM HUNTER CONDITIONS - Optimized for 100x potential
@@ -368,13 +378,28 @@ export class DiscoveryEngine {
         : `${candidate.priceChange1h.toFixed(0)}% 1h change`,
     });
 
-    // Calculate GEM score
-    const { scores, signals } = this.calculateGemScores(candidate, conditions, ageHours, buyRatio, volumeToMcap);
+    // CONDITION 9: SOCIAL VALIDATION (Twitter/X mentions)
+    const hasSocialValidationResult = hasSocialValidation(socialSignal);
+    conditions.push({
+      name: 'Social Validation',
+      passed: hasSocialValidationResult,
+      value: socialSignal ? `${socialSignal.mentionCount} mentions` : 'No data',
+      threshold: '5+ mentions, trending',
+      evidence: socialSignal
+        ? hasSocialValidationResult
+          ? `🐦 VALIDATED: ${socialSignal.mentionCount} mentions, ${socialSignal.mentionVelocity}/hr velocity${socialSignal.spikeDetected ? ' - VIRAL!' : ''}`
+          : `${socialSignal.mentionCount} mentions (below threshold)`
+        : 'Twitter data unavailable',
+    });
+
+    // Calculate GEM score with social boost
+    const socialBoost = getSocialBoost(socialSignal);
+    const { scores, signals } = this.calculateGemScores(candidate, conditions, ageHours, buyRatio, volumeToMcap, socialBoost, socialSignal);
     candidate.scores = scores;
     candidate.signals = signals;
 
     const conditionsPassed = conditions.filter(c => c.passed).length;
-    const qualifies = conditionsPassed >= 4; // Need 4 of 8 conditions for GEM status
+    const qualifies = conditionsPassed >= 4; // Need 4 of 9 conditions for GEM status
 
     return {
       candidate,
@@ -393,9 +418,19 @@ export class DiscoveryEngine {
     conditions: DiscoveryCondition[],
     ageHours: number,
     buyRatio: number,
-    volumeToMcap: number
+    volumeToMcap: number,
+    socialBoost: number = 0,
+    socialSignal?: { mentionCount: number; mentionVelocity: number; spikeDetected: boolean } | null
   ): { scores: TokenScores; signals: string[] } {
     const signals: string[] = [];
+    
+    // Add social signal to signals if significant
+    if (socialSignal && socialSignal.mentionCount > 0) {
+      const socialText = formatSocialSignal(socialSignal as any);
+      if (socialText) {
+        signals.push(socialText);
+      }
+    }
     let momentum = 0;
     let gemBonus = 0;
 
@@ -489,14 +524,29 @@ export class DiscoveryEngine {
       signals.push(`📈 ACCELERATING: +${token.priceChange1h.toFixed(0)}% momentum`);
     }
 
+    // SOCIAL VALIDATION BOOST
+    if (socialBoost > 0) {
+      gemBonus += socialBoost;
+      if (socialSignal?.spikeDetected) {
+        signals.push(`🐦 VIRAL ON X: ${socialSignal.mentionCount} mentions, trending!`);
+      } else if (socialBoost >= 20) {
+        signals.push(`🐦 X Validated: ${socialSignal?.mentionCount || 0} mentions`);
+      }
+    }
+
     // PRIME GEM SIGNAL
     if (gemBonus >= 50 && momentum >= 30 && buyRatio > 0.60 && token.fdv < 50000 && ageHours < 2) {
       signals.unshift(`🚨 PRIME GEM: Ultra-early, ultra-low mcap, strong buying - 100x POTENTIAL`);
     }
 
-    // MOONSHOT SIGNAL - The ultimate 100x indicator
+    // MOONSHOT SIGNAL - The ultimate 100x indicator (now includes social validation)
+    const hasSocialViral = socialSignal?.spikeDetected || (socialSignal?.mentionCount || 0) > 15;
     if (ageHours < 0.5 && token.fdv < 30000 && buyRatio > 0.70 && token.priceChange1h > 50 && totalTxns > 50) {
-      signals.unshift(`🌙 MOONSHOT ALERT: All 100x indicators aligned!`);
+      if (hasSocialViral) {
+        signals.unshift(`🌙🐦 MOONSHOT + VIRAL: All indicators aligned + social validation!`);
+      } else {
+        signals.unshift(`🌙 MOONSHOT ALERT: All 100x indicators aligned!`);
+      }
     }
 
     // Standard scoring
@@ -510,18 +560,24 @@ export class DiscoveryEngine {
     if (token.liquidity >= 5000) risk += 15;
     if (buyRatio >= 0.5) risk += 15;
     if (ageHours < 1) risk -= 10; // Very new = higher risk but higher reward
+    // Social validation increases confidence
+    if (socialBoost >= 15) risk += 10;
 
     const passedCount = conditions.filter(c => c.passed).length;
-    const confidence = Math.min(100, (passedCount / conditions.length) * 50 + 30);
+    let confidence = Math.min(100, (passedCount / conditions.length) * 50 + 30);
+    // Social validation boosts confidence
+    if (socialBoost >= 20) confidence += 10;
 
-    // Clamp scores
-    momentum = Math.max(0, Math.min(100, momentum + gemBonus));
+    // Clamp scores (include social boost in momentum)
+    momentum = Math.max(0, Math.min(100, momentum + gemBonus + socialBoost));
     risk = Math.max(0, Math.min(100, risk));
+    confidence = Math.min(100, confidence);
 
     // Composite heavily weighted toward momentum for GEM hunting
     const composite = Math.round(
-      momentum * 0.60 +  // Momentum is king for gems
+      momentum * 0.55 +  // Momentum is king for gems
       gemBonus * 0.10 +  // Extra gem bonus
+      socialBoost * 0.05 + // Social validation bonus
       liquidity * 0.10 +
       risk * 0.10 +
       confidence * 0.10

@@ -70,6 +70,7 @@ export default function GemHunter() {
 
 	const fetchGems = async () => {
 		try {
+			// Don't clear gems while loading - keep showing previous results
 			setLoading(true);
 			const response = await fetch(`${API_URL}/clawf/gems?limit=10`);
 			
@@ -80,18 +81,23 @@ export default function GemHunter() {
 			const data: GemResponse = await response.json();
 			
 			if (data.success && data.data?.gems) {
-				setGems(data.data.gems);
+				// Only update if we got results
+				if (data.data.gems.length > 0) {
+					setGems(data.data.gems);
+				}
 				if (data.data.stats) {
 					setStats(data.data.stats);
 				}
 				setLastUpdated(new Date());
-			} else {
-				setGems([]);
+				setError(null);
 			}
-			setError(null);
+			// Don't clear gems on empty response - keep previous
 		} catch (err) {
 			console.error('GemHunter error:', err);
-			setError(err instanceof Error ? err.message : 'Failed to fetch gems');
+			// Only show error if we have no gems to display
+			if (gems.length === 0) {
+				setError(err instanceof Error ? err.message : 'Failed to fetch gems');
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -121,12 +127,18 @@ export default function GemHunter() {
 		return { text: '💎 GEM', class: 'bg-gray-600 text-white' };
 	};
 
-	if (loading && gems.length === 0) {
+	// Only show skeleton on initial load when we have no gems
+	if (gems.length === 0 && loading) {
 		return (
 			<div className="space-y-4">
 				<div className="flex items-center justify-between">
-					<div className="h-8 bg-gray-700 rounded w-48 animate-pulse"></div>
-					<div className="h-8 bg-gray-700 rounded w-24 animate-pulse"></div>
+					<div className="flex items-center gap-3">
+						<span className="text-3xl animate-bounce">🦀</span>
+						<div>
+							<h2 className="text-xl font-bold text-white">ClawF is scanning...</h2>
+							<p className="text-sm text-gray-400">Finding opportunities across all chains</p>
+						</div>
+					</div>
 				</div>
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					{[...Array(4)].map((_, i) => (
