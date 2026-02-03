@@ -260,18 +260,18 @@ export interface ClawFConfig {
 }
 
 export const DEFAULT_CONFIG: ClawFConfig = {
-  // PRE-PUMP detection settings
-  minLiquidity: 10000,           // Min $10K liquidity for safety
-  minConditionsToPass: 4,        // Require 4/7 conditions for higher accuracy
-  volumeSpikeThreshold: 1.5,     // Volume building (not spiked yet)
-  buyPressureThreshold: 0.55,    // Buy dominance threshold
+  // HIGH WIN-RATE detection settings (v2.0 - stricter for 70-80% win rate)
+  minLiquidity: 25000,           // Min $25K liquidity for safety
+  minConditionsToPass: 8,        // Require 8/12 conditions for high accuracy
+  volumeSpikeThreshold: 2.0,     // Higher volume threshold
+  buyPressureThreshold: 0.65,    // Stricter buy dominance (was 0.55)
   
   // Exit targets (for tracking)
-  profitTargets: [2, 5, 10],     // Take profit at 2x, 5x, 10x
-  trailingStopPercent: 25,       // Trail 25% below peak after 2x
-  trailingStopActivation: 2,     // Activate trailing after 2x
-  liquidityDropThreshold: 40,    // Exit if liquidity drops 40%
-  liquidityDropWindow: 600,      // Within 10 minutes
+  profitTargets: [1.5, 2, 3],    // Conservative: 1.5x, 2x, 3x (was 2x, 5x, 10x)
+  trailingStopPercent: 15,       // Tighter trail 15% below peak (was 25%)
+  trailingStopActivation: 1.5,   // Activate trailing after 1.5x (was 2x)
+  liquidityDropThreshold: 30,    // Exit if liquidity drops 30% (was 40%)
+  liquidityDropWindow: 300,      // Within 5 minutes (was 10)
   
   // Wallet intelligence
   oldWalletMinAge: 15552000,     // 6 months for "old wallet"

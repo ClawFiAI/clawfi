@@ -77,6 +77,14 @@ function copyStaticFiles() {
         );
       }
       
+      // Copy logo-square.png from public folder
+      if (existsSync(resolve(publicDir, 'logo-square.png'))) {
+        copyFileSync(
+          resolve(publicDir, 'logo-square.png'),
+          resolve(distDir, 'logo-square.png')
+        );
+      }
+      
       console.log('[ClawFi Build] Static files copied successfully');
     },
   };

@@ -1,5 +1,5 @@
 /**
- * ClawFi Options Page Script v0.5.0
+ * ClawFi Options Page Script v0.5.1
  * Simplified settings - no auth required
  */
 

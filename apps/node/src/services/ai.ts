@@ -8,7 +8,13 @@
  * - DexScreener market data integration
  */
 
-import OpenAI from 'openai';
+// OpenAI import - lazy loaded to prevent startup errors
+let OpenAI: any = null;
+try {
+  OpenAI = require('openai').default;
+} catch {
+  console.log('[AI Service] OpenAI not available - AI features disabled');
+}
 import type { PrismaClient } from '@prisma/client';
 
 // ============================================

@@ -8,10 +8,25 @@
  *           GeckoTerminal, DexTools, Defined.fi, Birdeye
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
+import { generateTokenCommentary, getShortComment, askClawF, QUICK_QUESTIONS, type AICommentary, type TokenContext, type AIChatResponse } from '../services/ai';
 
 console.log('[ClawFi] Liquid Glass content script loaded:', window.location.href);
+
+// Patch history for SPA navigation detection
+const originalPushState = history.pushState;
+const originalReplaceState = history.replaceState;
+
+history.pushState = function(...args) {
+  originalPushState.apply(this, args);
+  window.dispatchEvent(new Event('clawfi-navigation'));
+};
+
+history.replaceState = function(...args) {
+  originalReplaceState.apply(this, args);
+  window.dispatchEvent(new Event('clawfi-navigation'));
+};
 
 // ============================================
 // CONSTANTS & TYPES
@@ -262,9 +277,15 @@ function ClawFiOverlay() {
   const [expanded, setExpanded] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [activeTab, setActiveTab] = useState<'market' | 'safety' | 'signals'>('market');
+  const [activeTab, setActiveTab] = useState<'market' | 'safety' | 'signals' | 'ask'>('market');
+  const [aiCommentary, setAiCommentary] = useState<AICommentary | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [chatResponse, setChatResponse] = useState<AIChatResponse | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [customQuestion, setCustomQuestion] = useState('');
   
   const iconUrl = getIconUrl(48);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, (s: Settings) => {
@@ -303,20 +324,56 @@ function ClawFiOverlay() {
         ]);
         setMarketData(md);
         setSafetyData(sd);
+        
+        // Generate AI commentary
+        if (md || sd) {
+          setAiLoading(true);
+          const context: TokenContext = {
+            address: detectedToken,
+            chain: detectedChain || 'unknown',
+            priceUsd: md?.priceUsd,
+            priceChange24h: md?.priceChange24h,
+            priceChange1h: md?.priceChangeH1,
+            volume24h: md?.volume24h,
+            liquidity: md?.liquidity,
+            marketCap: md?.marketCap,
+            txns24h: md?.txns24h,
+            age: md?.pairCreatedAt ? (Date.now() - md.pairCreatedAt) / (1000 * 60 * 60) : undefined,
+            riskScore: sd?.riskScore,
+            riskLevel: sd?.overallRisk,
+            issues: sd?.issues,
+            honeypot: sd?.honeypot,
+            liquidityLocked: sd?.liquidityLocked,
+            contractVerified: sd?.contractVerified,
+          };
+          const commentary = await generateTokenCommentary(context);
+          setAiCommentary(commentary);
+          setAiLoading(false);
+        }
       });
     }
   }, []);
 
   // Re-check on URL changes (SPA navigation)
   useEffect(() => {
+    let lastUrl = window.location.href;
+    
     const checkForTokenChanges = () => {
+      // Debounce by checking if URL actually changed
+      if (window.location.href === lastUrl && token) return;
+      lastUrl = window.location.href;
+      
       const newToken = detectTokenAddress();
       const newChain = detectChain(window.location.href);
       
+      console.log('[ClawFi] Checking for token, found:', newToken, 'chain:', newChain);
+      
       if (newToken && newToken !== token) {
+        console.log('[ClawFi] New token detected:', newToken);
         setToken(newToken);
         setChain(newChain);
         setLoading(true);
+        setChatResponse(null); // Reset chat when token changes
         
         // Fetch new data
         chrome.runtime.sendMessage(
@@ -327,21 +384,50 @@ function ClawFiOverlay() {
           }
         );
         
-        fetchMarketData(newToken, newChain, settings || undefined).then(setMarketData);
-        fetchSafetyData(newToken, newChain, settings || undefined).then(setSafetyData);
+        fetchMarketData(newToken, newChain, settings || undefined).then(async (md) => {
+          setMarketData(md);
+          // Also generate AI commentary when token changes
+          const sd = await fetchSafetyData(newToken, newChain, settings || undefined);
+          setSafetyData(sd);
+          
+          if (md || sd) {
+            setAiLoading(true);
+            const context: TokenContext = {
+              address: newToken,
+              chain: newChain || 'unknown',
+              priceUsd: md?.priceUsd,
+              priceChange24h: md?.priceChange24h,
+              priceChange1h: md?.priceChangeH1,
+              volume24h: md?.volume24h,
+              liquidity: md?.liquidity,
+              marketCap: md?.marketCap,
+              txns24h: md?.txns24h,
+              riskScore: sd?.riskScore,
+              honeypot: sd?.honeypot,
+              liquidityLocked: sd?.liquidityLocked,
+            };
+            const commentary = await generateTokenCommentary(context);
+            setAiCommentary(commentary);
+            setAiLoading(false);
+          }
+        });
       }
     };
 
-    // Listen for URL changes
-    const observer = new MutationObserver(checkForTokenChanges);
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Check immediately
+    setTimeout(checkForTokenChanges, 500);
     
-    // Also check on popstate for SPA routing
+    // Listen for SPA navigation
+    window.addEventListener('clawfi-navigation', checkForTokenChanges);
     window.addEventListener('popstate', checkForTokenChanges);
     
+    // Periodic check for SPAs that don't trigger events
+    const interval = setInterval(checkForTokenChanges, 2000);
+    
     return () => {
-      observer.disconnect();
+      window.removeEventListener('clawfi-navigation', checkForTokenChanges);
       window.removeEventListener('popstate', checkForTokenChanges);
+      clearInterval(interval);
     };
   }, [token, settings]);
 
@@ -696,6 +782,7 @@ function ClawFiOverlay() {
             {[
               { id: 'market', label: 'Market', icon: '📊' },
               { id: 'safety', label: 'Safety', icon: '🛡️' },
+              { id: 'ask', label: 'Ask ClawF', icon: '🤖' },
               { id: 'signals', label: 'Signals', icon: '🔔', count: signals.length },
             ].map((tab) => (
               <button
@@ -970,6 +1057,332 @@ function ClawFiOverlay() {
               </div>
             )}
 
+            {/* Ask ClawF Tab */}
+            {activeTab === 'ask' && (
+              <div style={{ padding: '16px 20px' }}>
+                {/* Quick Questions */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'rgba(255,255,255,0.4)',
+                    marginBottom: '10px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    Quick Questions
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {QUICK_QUESTIONS.map((q) => (
+                      <button
+                        type="button"
+                        key={q.id}
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('[ClawFi] Quick question clicked:', q.id);
+                          if (!token || chatLoading) {
+                            console.log('[ClawFi] Cannot ask - token:', token, 'loading:', chatLoading);
+                            return;
+                          }
+                          setChatLoading(true);
+                          setChatResponse(null);
+                          try {
+                            const context: TokenContext = {
+                              address: token,
+                              chain: chain || 'unknown',
+                              priceUsd: marketData?.priceUsd,
+                              priceChange24h: marketData?.priceChange24h,
+                              priceChange1h: marketData?.priceChangeH1,
+                              volume24h: marketData?.volume24h,
+                              liquidity: marketData?.liquidity,
+                              marketCap: marketData?.marketCap,
+                              txns24h: marketData?.txns24h,
+                              riskScore: safetyData?.riskScore,
+                              honeypot: safetyData?.honeypot,
+                              liquidityLocked: safetyData?.liquidityLocked,
+                              contractVerified: safetyData?.contractVerified,
+                              issues: safetyData?.issues,
+                            };
+                            console.log('[ClawFi] Asking ClawF with context:', context);
+                            const response = await askClawF(q.id, context);
+                            console.log('[ClawFi] Got response:', response);
+                            setChatResponse(response);
+                          } catch (err) {
+                            console.error('[ClawFi] Error asking ClawF:', err);
+                          } finally {
+                            setChatLoading(false);
+                          }
+                        }}
+                        style={{
+                          padding: '8px 14px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          borderRadius: '100px',
+                          color: 'rgba(255,255,255,0.9)',
+                          fontSize: '12px',
+                          cursor: chatLoading ? 'wait' : 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          opacity: chatLoading ? 0.5 : 1,
+                        }}
+                      >
+                        <span>{q.icon}</span>
+                        <span>{q.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Question Input */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderRadius: '12px',
+                    padding: '4px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                  }}>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={customQuestion}
+                      onChange={(e) => setCustomQuestion(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === 'Enter' && customQuestion.trim() && token && !chatLoading) {
+                          setChatLoading(true);
+                          setChatResponse(null);
+                          const context: TokenContext = {
+                            address: token,
+                            chain: chain || 'unknown',
+                            priceUsd: marketData?.priceUsd,
+                            priceChange24h: marketData?.priceChange24h,
+                            priceChange1h: marketData?.priceChangeH1,
+                            volume24h: marketData?.volume24h,
+                            liquidity: marketData?.liquidity,
+                            marketCap: marketData?.marketCap,
+                            txns24h: marketData?.txns24h,
+                            riskScore: safetyData?.riskScore,
+                            honeypot: safetyData?.honeypot,
+                            liquidityLocked: safetyData?.liquidityLocked,
+                            contractVerified: safetyData?.contractVerified,
+                          };
+                          const response = await askClawF(customQuestion, context);
+                          setChatResponse(response);
+                          setChatLoading(false);
+                          setCustomQuestion('');
+                        }
+                      }}
+                      placeholder="Ask ClawF anything about this token..."
+                      style={{
+                        flex: 1,
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        color: 'white',
+                        fontSize: '13px',
+                        padding: '10px 12px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('[ClawFi] Custom question submit clicked');
+                        if (!customQuestion.trim() || !token || chatLoading) return;
+                        setChatLoading(true);
+                        setChatResponse(null);
+                        try {
+                          const context: TokenContext = {
+                            address: token,
+                            chain: chain || 'unknown',
+                            priceUsd: marketData?.priceUsd,
+                            priceChange24h: marketData?.priceChange24h,
+                            priceChange1h: marketData?.priceChangeH1,
+                            volume24h: marketData?.volume24h,
+                            liquidity: marketData?.liquidity,
+                            marketCap: marketData?.marketCap,
+                            txns24h: marketData?.txns24h,
+                            riskScore: safetyData?.riskScore,
+                            honeypot: safetyData?.honeypot,
+                            liquidityLocked: safetyData?.liquidityLocked,
+                            contractVerified: safetyData?.contractVerified,
+                          };
+                          const response = await askClawF(customQuestion, context);
+                          setChatResponse(response);
+                          setCustomQuestion('');
+                        } catch (err) {
+                          console.error('[ClawFi] Error asking ClawF:', err);
+                        } finally {
+                          setChatLoading(false);
+                        }
+                      }}
+                      style={{
+                        padding: '10px 16px',
+                        background: 'linear-gradient(135deg, #0A84FF, #5856D6)',
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: 'white',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: chatLoading ? 'wait' : 'pointer',
+                        opacity: chatLoading || !customQuestion.trim() ? 0.5 : 1,
+                      }}
+                    >
+                      Ask
+                    </button>
+                  </div>
+                </div>
+
+                {/* Loading State */}
+                {chatLoading && (
+                  <div style={{ padding: '30px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        border: '2.5px solid rgba(255, 255, 255, 0.1)',
+                        borderTopColor: '#0A84FF',
+                        borderRadius: '50%',
+                        margin: '0 auto 12px',
+                        animation: 'clawfi-spin 0.8s linear infinite',
+                      }}
+                    />
+                    <div style={{ fontSize: '14px' }}>ClawF is thinking...</div>
+                  </div>
+                )}
+
+                {/* Chat Response */}
+                {chatResponse && !chatLoading && (
+                  <div>
+                    {/* Recommendation Badge */}
+                    <div
+                      style={{
+                        padding: '16px',
+                        background: chatResponse.recommendation === 'buy' ? 'rgba(48, 209, 88, 0.15)' :
+                                    chatResponse.recommendation === 'avoid' ? 'rgba(255, 69, 58, 0.15)' :
+                                    chatResponse.recommendation === 'hold' ? 'rgba(255, 159, 10, 0.15)' :
+                                    'rgba(10, 132, 255, 0.15)',
+                        border: `1px solid ${
+                          chatResponse.recommendation === 'buy' ? 'rgba(48, 209, 88, 0.3)' :
+                          chatResponse.recommendation === 'avoid' ? 'rgba(255, 69, 58, 0.3)' :
+                          chatResponse.recommendation === 'hold' ? 'rgba(255, 159, 10, 0.3)' :
+                          'rgba(10, 132, 255, 0.3)'
+                        }`,
+                        borderRadius: '14px',
+                        marginBottom: '14px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '20px' }}>
+                            {chatResponse.recommendation === 'buy' ? '✅' :
+                             chatResponse.recommendation === 'avoid' ? '🚫' :
+                             chatResponse.recommendation === 'hold' ? '⏸️' : '🔍'}
+                          </span>
+                          <span style={{
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            color: chatResponse.recommendation === 'buy' ? '#30D158' :
+                                   chatResponse.recommendation === 'avoid' ? '#FF453A' :
+                                   chatResponse.recommendation === 'hold' ? '#FF9F0A' : '#0A84FF',
+                            textTransform: 'uppercase',
+                          }}>
+                            {chatResponse.recommendation === 'dyor' ? 'Do Your Research' : chatResponse.recommendation}
+                          </span>
+                        </div>
+                        <span style={{
+                          fontSize: '10px',
+                          padding: '4px 8px',
+                          background: 'rgba(255,255,255,0.1)',
+                          borderRadius: '100px',
+                          color: 'rgba(255,255,255,0.6)',
+                        }}>
+                          {chatResponse.confidence} confidence
+                        </span>
+                      </div>
+                      <p style={{
+                        fontSize: '14px',
+                        color: 'rgba(255,255,255,0.95)',
+                        lineHeight: '1.6',
+                        margin: 0,
+                      }}>
+                        {chatResponse.answer}
+                      </p>
+                    </div>
+
+                    {/* Reasoning */}
+                    {chatResponse.reasoning.length > 0 && (
+                      <div style={{ marginBottom: '14px' }}>
+                        <div style={{
+                          fontSize: '11px',
+                          color: 'rgba(255,255,255,0.4)',
+                          marginBottom: '10px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}>
+                          Analysis Based On
+                        </div>
+                        {chatResponse.reasoning.map((reason, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              padding: '10px 12px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid rgba(255, 255, 255, 0.08)',
+                              borderRadius: '10px',
+                              marginBottom: '6px',
+                              fontSize: '12px',
+                              color: 'rgba(255,255,255,0.75)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                            }}
+                          >
+                            <span style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: reason.toLowerCase().includes('critical') || reason.toLowerCase().includes('warning') ? '#FF453A' :
+                                         reason.toLowerCase().includes('good') || reason.toLowerCase().includes('locked') ? '#30D158' : '#0A84FF',
+                              flexShrink: 0,
+                            }} />
+                            {reason}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Disclaimer */}
+                    <div style={{
+                      padding: '10px 12px',
+                      background: 'rgba(0, 0, 0, 0.2)',
+                      borderRadius: '8px',
+                      fontSize: '10px',
+                      color: 'rgba(255,255,255,0.35)',
+                      textAlign: 'center',
+                    }}>
+                      ClawF provides analysis based on on-chain data. Not financial advice. Always DYOR.
+                    </div>
+                  </div>
+                )}
+
+                {/* Initial State */}
+                {!chatResponse && !chatLoading && (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    <div style={{ marginBottom: '12px', fontSize: '40px' }}>🤖</div>
+                    <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>Ask ClawF</div>
+                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
+                      Tap a quick question or type your own
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Signals Tab */}
             {activeTab === 'signals' && (
               <div>
@@ -1044,7 +1457,7 @@ function ClawFiOverlay() {
             }}
           >
             <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
-              ClawFi v0.5.0
+              ClawFi v0.5.1
             </span>
             <button
               onClick={() => chrome.runtime.openOptionsPage()}

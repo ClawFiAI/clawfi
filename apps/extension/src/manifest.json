@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ClawFi",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Premium degen trading assistant with Liquid Glass UI - Real-time token analysis, safety scores, whale tracking, swap quotes across 15+ chains. Supports Dexscreener, Jupiter, Uniswap, PancakeSwap, Pump.fun, Clanker, GeckoTerminal & more.",
   "permissions": ["storage", "activeTab", "alarms"],
   "host_permissions": [
@@ -101,7 +101,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*.png"],
+      "resources": ["icons/*.png", "logo.png", "logo-square.png", "*.png"],
       "matches": ["<all_urls>"]
     }
   ]

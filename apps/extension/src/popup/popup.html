@@ -10,9 +10,11 @@
   <style>
     /* Critical inline styles for instant load */
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    html, body {
       width: 400px;
       height: 580px;
+      max-width: 400px;
+      max-height: 580px;
       overflow: hidden;
       font-family: 'Doto', monospace;
       background: linear-gradient(145deg, #0a0a12 0%, #12121a 50%, #0d0d15 100%);
@@ -23,7 +25,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100%;
+      width: 400px;
+      height: 580px;
+      max-height: 580px;
+      overflow: hidden;
       color: rgba(255, 255, 255, 0.5);
     }
     .init-loader {
@@ -52,6 +57,6 @@
       <span>Loading ClawFi...</span>
     </div>
   </div>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

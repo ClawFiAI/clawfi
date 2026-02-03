@@ -247,9 +247,9 @@ export class DiscoveryEngine {
   }
 
   /**
-   * Evaluate token specifically for 100x GEM potential
-   * Different criteria than regular scan - focused on ultra-early, ultra-low mcap
-   * Now includes Twitter/X social validation
+   * Evaluate token specifically for HIGH WIN-RATE GEM potential
+   * STRICT CRITERIA for 70-80% win rate - quality over quantity
+   * v2.0 - Tightened filters for sustainable profitability
    */
   private async evaluateGemCandidate(token: Partial<TokenCandidate>): Promise<DiscoveryResult> {
     const conditions: DiscoveryCondition[] = [];
@@ -274,111 +274,106 @@ export class DiscoveryEngine {
     } : undefined;
 
     // ═══════════════════════════════════════════════════════════════
-    // GEM HUNTER CONDITIONS - Optimized for 100x potential
+    // HIGH WIN-RATE GEM CONDITIONS - Strict filters for 70-80% success
     // ═══════════════════════════════════════════════════════════════
 
-    // CONDITION 1: ULTRA FRESH (< 2 hours = highest potential)
-    const isUltraFresh = ageHours < 2;
+    // CONDITION 1: MINIMUM LIQUIDITY (>$25K = reduces rug risk)
+    const hasMinLiquidity = candidate.liquidity >= 25000;
     conditions.push({
-      name: 'Ultra Fresh Launch',
-      passed: isUltraFresh,
-      value: ageHours < 999 ? `${ageHours.toFixed(1)}h old` : 'Unknown',
-      threshold: '< 2 hours',
-      evidence: isUltraFresh 
-        ? `🆕 BRAND NEW: ${ageHours.toFixed(1)}h old - first mover opportunity!`
-        : ageHours < 6 ? `${ageHours.toFixed(0)}h old - still early` : 'Mature token',
+      name: 'Minimum Liquidity',
+      passed: hasMinLiquidity,
+      value: `$${(candidate.liquidity / 1000).toFixed(1)}K`,
+      threshold: '> $25K',
+      evidence: hasMinLiquidity
+        ? `✅ SAFE: $${(candidate.liquidity / 1000).toFixed(1)}K liquidity - tradeable`
+        : `⚠️ LOW: $${(candidate.liquidity / 1000).toFixed(1)}K - high slippage risk`,
     });
 
-    // CONDITION 2: ULTRA LOW MCAP (< $50K = 100x to $5M possible)
-    const isUltraLowMcap = candidate.fdv < 50000 && candidate.fdv > 1000;
+    // CONDITION 2: STRONG BUY DOMINANCE (>75% = very high conviction)
+    const hasStrongBuying = buyRatio >= 0.75;
     conditions.push({
-      name: 'Ultra Low MCap',
-      passed: isUltraLowMcap,
-      value: candidate.fdv,
-      threshold: '$1K - $50K',
-      evidence: isUltraLowMcap
-        ? `💎 GEM: $${(candidate.fdv / 1000).toFixed(1)}K mcap - 100x to $${(candidate.fdv * 100 / 1000000).toFixed(1)}M`
-        : `$${(candidate.fdv / 1000).toFixed(0)}K mcap`,
-    });
-
-    // CONDITION 3: STRONG BUY PRESSURE (> 65% = high conviction)
-    const hasStrongBuying = buyRatio > 0.65;
-    conditions.push({
-      name: 'Strong Buy Pressure',
+      name: 'Strong Buy Dominance',
       passed: hasStrongBuying,
       value: `${(buyRatio * 100).toFixed(0)}% buys`,
-      threshold: '> 65%',
+      threshold: '≥ 75%',
       evidence: hasStrongBuying
-        ? `🔥 HIGH CONVICTION: ${(buyRatio * 100).toFixed(0)}% buy ratio`
-        : `${(buyRatio * 100).toFixed(0)}% buy ratio`,
+        ? `🔥 STRONG DEMAND: ${(buyRatio * 100).toFixed(0)}% buy ratio`
+        : `${(buyRatio * 100).toFixed(0)}% buy ratio (need 75%+)`,
     });
 
-    // CONDITION 4: VIRAL ACTIVITY (many txns early = discovery happening)
-    const hasViralActivity = totalTxns > 50 && ageHours < 3;
+    // CONDITION 3: HEALTHY VOLUME (>$50K 24h volume = real interest)
+    const hasHealthyVolume = candidate.volume24h >= 50000;
     conditions.push({
-      name: 'Viral Activity',
-      passed: hasViralActivity,
-      value: totalTxns,
-      threshold: '> 50 txns in < 3h',
-      evidence: hasViralActivity
-        ? `🚀 VIRAL: ${totalTxns} transactions in ${ageHours.toFixed(1)}h - being discovered!`
-        : `${totalTxns} transactions`,
+      name: 'Healthy Volume',
+      passed: hasHealthyVolume,
+      value: `$${(candidate.volume24h / 1000).toFixed(0)}K`,
+      threshold: '> $50K 24h',
+      evidence: hasHealthyVolume
+        ? `📊 ACTIVE: $${(candidate.volume24h / 1000).toFixed(0)}K volume`
+        : `$${(candidate.volume24h / 1000).toFixed(0)}K volume (need $50K+)`,
     });
 
-    // CONDITION 5: HEALTHY LIQUIDITY RATIO (10-60% = tradeable but not locked)
-    const hasHealthyLiq = liqRatio >= 10 && liqRatio <= 60;
+    // CONDITION 4: SUSTAINED ACTIVITY (>100 transactions = organic)
+    const hasSustainedActivity = totalTxns >= 100;
     conditions.push({
-      name: 'Healthy Liquidity',
+      name: 'Sustained Activity',
+      passed: hasSustainedActivity,
+      value: `${totalTxns} txns`,
+      threshold: '≥ 100 transactions',
+      evidence: hasSustainedActivity
+        ? `✅ ORGANIC: ${totalTxns} transactions - real trading`
+        : `${totalTxns} transactions (need 100+)`,
+    });
+
+    // CONDITION 5: HEALTHY LIQ RATIO (15-50% = balanced)
+    const hasHealthyLiq = liqRatio >= 15 && liqRatio <= 50;
+    conditions.push({
+      name: 'Healthy Liq Ratio',
       passed: hasHealthyLiq,
       value: `${liqRatio.toFixed(0)}%`,
-      threshold: '10-60% liq/mcap',
+      threshold: '15-50% liq/mcap',
       evidence: hasHealthyLiq
-        ? `💧 Good liquidity: ${liqRatio.toFixed(0)}% of mcap`
-        : liqRatio > 60 ? 'High liq ratio' : 'Low liquidity',
+        ? `💧 BALANCED: ${liqRatio.toFixed(0)}% liq/mcap`
+        : liqRatio > 50 ? `Too high: ${liqRatio.toFixed(0)}%` : `Too low: ${liqRatio.toFixed(0)}%`,
     });
 
-    // CONDITION 6: POSITIVE EARLY MOMENTUM (price up in first hour)
-    const hasEarlyMomentum = candidate.priceChange1h > 0 && ageHours < 3;
+    // CONDITION 6: POSITIVE MOMENTUM (price up = trend confirmed)
+    const hasPositiveMomentum = candidate.priceChange1h > 5;
     conditions.push({
-      name: 'Early Momentum',
-      passed: hasEarlyMomentum,
+      name: 'Positive Momentum',
+      passed: hasPositiveMomentum,
       value: `${candidate.priceChange1h.toFixed(1)}%`,
-      threshold: '> 0% 1h change',
-      evidence: hasEarlyMomentum
-        ? `📈 Positive start: +${candidate.priceChange1h.toFixed(0)}% since launch`
+      threshold: '> 5% 1h change',
+      evidence: hasPositiveMomentum
+        ? `📈 TRENDING: +${candidate.priceChange1h.toFixed(0)}% in 1h`
         : `${candidate.priceChange1h.toFixed(0)}% 1h change`,
     });
 
-    // CONDITION 7: VOLUME EXPLOSION (high vol relative to mcap)
-    const hasVolumeExplosion = volumeToMcap > 0.5;
+    // CONDITION 7: NOT OVEREXTENDED (< 200% 1h = room to run)
+    const notOverextended = candidate.priceChange1h < 200;
+    conditions.push({
+      name: 'Not Overextended',
+      passed: notOverextended,
+      value: `${candidate.priceChange1h.toFixed(0)}%`,
+      threshold: '< 200% 1h gain',
+      evidence: notOverextended
+        ? `✅ ROOM TO RUN: +${candidate.priceChange1h.toFixed(0)}% (not topped)`
+        : `⚠️ OVEREXTENDED: +${candidate.priceChange1h.toFixed(0)}% - risky entry`,
+    });
+
+    // CONDITION 8: VOLUME EXPLOSION (>100% vol/mcap = high interest)
+    const hasVolumeExplosion = volumeToMcap >= 1.0;
     conditions.push({
       name: 'Volume Explosion',
       passed: hasVolumeExplosion,
       value: `${(volumeToMcap * 100).toFixed(0)}%`,
-      threshold: '> 50% vol/mcap',
+      threshold: '≥ 100% vol/mcap',
       evidence: hasVolumeExplosion
         ? `💥 EXPLOSIVE: ${(volumeToMcap * 100).toFixed(0)}% volume ratio`
         : `${(volumeToMcap * 100).toFixed(0)}% vol/mcap`,
     });
 
-    // CONDITION 8: MOMENTUM ACCELERATION (price rising fast for fresh tokens)
-    // Fresh token with >50% 1h gain AND high buy ratio = acceleration phase
-    const hasMomentumAcceleration = 
-      ageHours < 1 && 
-      candidate.priceChange1h > 50 && 
-      buyRatio > 0.60 &&
-      totalTxns > 30;
-    conditions.push({
-      name: 'Momentum Acceleration',
-      passed: hasMomentumAcceleration,
-      value: `${candidate.priceChange1h.toFixed(0)}% in ${(ageHours * 60).toFixed(0)}min`,
-      threshold: '> 50% gain in < 1h with high activity',
-      evidence: hasMomentumAcceleration
-        ? `🚀 ACCELERATING: +${candidate.priceChange1h.toFixed(0)}% in ${(ageHours * 60).toFixed(0)} min - parabolic potential!`
-        : `${candidate.priceChange1h.toFixed(0)}% 1h change`,
-    });
-
-    // CONDITION 9: SOCIAL VALIDATION (Twitter/X mentions)
+    // CONDITION 9: SOCIAL VALIDATION (Twitter/X mentions - REQUIRED)
     const hasSocialValidationResult = hasSocialValidation(socialSignal);
     conditions.push({
       name: 'Social Validation',
@@ -387,9 +382,45 @@ export class DiscoveryEngine {
       threshold: '5+ mentions, trending',
       evidence: socialSignal
         ? hasSocialValidationResult
-          ? `🐦 VALIDATED: ${socialSignal.mentionCount} mentions, ${socialSignal.mentionVelocity}/hr velocity${socialSignal.spikeDetected ? ' - VIRAL!' : ''}`
+          ? `🐦 VALIDATED: ${socialSignal.mentionCount} mentions${socialSignal.spikeDetected ? ' - VIRAL!' : ''}`
           : `${socialSignal.mentionCount} mentions (below threshold)`
         : 'Twitter data unavailable',
+    });
+
+    // CONDITION 10: REASONABLE MCAP ($10K-$500K = growth potential)
+    const hasReasonableMcap = candidate.fdv >= 10000 && candidate.fdv <= 500000;
+    conditions.push({
+      name: 'Reasonable MCap',
+      passed: hasReasonableMcap,
+      value: `$${(candidate.fdv / 1000).toFixed(0)}K`,
+      threshold: '$10K - $500K',
+      evidence: hasReasonableMcap
+        ? `💎 SWEET SPOT: $${(candidate.fdv / 1000).toFixed(0)}K mcap`
+        : candidate.fdv < 10000 ? 'Too low mcap (risky)' : 'Too high mcap (limited upside)',
+    });
+
+    // CONDITION 11: BUYER DIVERSITY (unique buyers > 50 = real distribution)
+    const hasBuyerDiversity = candidate.uniqueBuyers24h >= 50;
+    conditions.push({
+      name: 'Buyer Diversity',
+      passed: hasBuyerDiversity,
+      value: `${candidate.uniqueBuyers24h} buyers`,
+      threshold: '≥ 50 unique buyers',
+      evidence: hasBuyerDiversity
+        ? `👥 DISTRIBUTED: ${candidate.uniqueBuyers24h} unique buyers`
+        : `${candidate.uniqueBuyers24h} buyers (need 50+)`,
+    });
+
+    // CONDITION 12: SELL PRESSURE LOW (sellers < 40% = holders confident)
+    const lowSellPressure = buyRatio >= 0.60;
+    conditions.push({
+      name: 'Low Sell Pressure',
+      passed: lowSellPressure,
+      value: `${((1 - buyRatio) * 100).toFixed(0)}% sells`,
+      threshold: '< 40% sell ratio',
+      evidence: lowSellPressure
+        ? `💪 CONFIDENT HOLDERS: Only ${((1 - buyRatio) * 100).toFixed(0)}% selling`
+        : `⚠️ HIGH SELLS: ${((1 - buyRatio) * 100).toFixed(0)}% selling`,
     });
 
     // Calculate GEM score with social boost
@@ -399,7 +430,11 @@ export class DiscoveryEngine {
     candidate.signals = signals;
 
     const conditionsPassed = conditions.filter(c => c.passed).length;
-    const qualifies = conditionsPassed >= 4; // Need 4 of 9 conditions for GEM status
+    
+    // STRICT QUALIFICATION: Need 8 of 12 conditions for HIGH WIN-RATE
+    // Plus MANDATORY: Must have liquidity AND buy dominance
+    const hasMandatory = hasMinLiquidity && buyRatio >= 0.65;
+    const qualifies = conditionsPassed >= 8 && hasMandatory;
 
     return {
       candidate,
@@ -411,7 +446,8 @@ export class DiscoveryEngine {
   }
 
   /**
-   * Calculate scores specifically optimized for 100x GEM detection
+   * Calculate scores for HIGH WIN-RATE gem detection
+   * v2.0 - Conservative scoring focused on sustainable profitability
    */
   private calculateGemScores(
     token: TokenCandidate,
@@ -433,158 +469,151 @@ export class DiscoveryEngine {
     }
     let momentum = 0;
     let gemBonus = 0;
+    let riskPenalty = 0;
 
     // ═══════════════════════════════════════════════════════════════
-    // GEM SCORING - Maximized for 100x potential
+    // HIGH WIN-RATE SCORING - Quality signals only
     // ═══════════════════════════════════════════════════════════════
 
-    // ULTRA FRESH BONUS (< 1h = highest potential)
-    if (ageHours < 0.5) {
-      gemBonus += 40;
-      signals.push(`🆕 ULTRA FRESH: ${(ageHours * 60).toFixed(0)} min old - FIRST MOVER!`);
-    } else if (ageHours < 1) {
-      gemBonus += 35;
-      signals.push(`🆕 BRAND NEW: ${(ageHours * 60).toFixed(0)} min old - very early`);
-    } else if (ageHours < 2) {
+    // LIQUIDITY BONUS (higher = safer)
+    if (token.liquidity >= 100000) {
       gemBonus += 25;
+      signals.push(`💧 DEEP LIQUIDITY: $${(token.liquidity / 1000).toFixed(0)}K`);
+    } else if (token.liquidity >= 50000) {
+      gemBonus += 15;
+    } else if (token.liquidity >= 25000) {
+      gemBonus += 5;
+    } else {
+      riskPenalty += 20;
+      signals.push(`⚠️ LOW LIQUIDITY: $${(token.liquidity / 1000).toFixed(1)}K - slippage risk`);
+    }
+
+    // AGE SCORING - Balanced approach (not too new, not too old)
+    if (ageHours >= 1 && ageHours <= 6) {
+      gemBonus += 20; // Sweet spot - survived initial dump risk
+      signals.push(`✅ VALIDATED: ${ageHours.toFixed(1)}h old - survived launch`);
+    } else if (ageHours < 1) {
+      gemBonus += 5; // New but risky
+      riskPenalty += 10;
+    } else if (ageHours < 24) {
+      gemBonus += 15;
       signals.push(`🌱 Fresh: ${ageHours.toFixed(1)}h old - early entry`);
-    } else if (ageHours < 6) {
+    } else if (ageHours >= 6 && ageHours < 12) {
       gemBonus += 10;
     }
 
-    // ULTRA LOW MCAP BONUS
-    if (token.fdv < 10000 && token.fdv > 1000) {
-      gemBonus += 40;
-      signals.push(`💎 ULTRA GEM: $${(token.fdv / 1000).toFixed(1)}K - 1000x potential!`);
-    } else if (token.fdv < 30000) {
-      gemBonus += 30;
-      signals.push(`💎 MICRO GEM: $${(token.fdv / 1000).toFixed(0)}K - 100x potential`);
-    } else if (token.fdv < 50000) {
+    // MCAP BONUS - Prefer $25K-$250K sweet spot
+    if (token.fdv >= 25000 && token.fdv < 100000) {
+      gemBonus += 25;
+      signals.push(`💎 SWEET SPOT: $${(token.fdv / 1000).toFixed(0)}K mcap`);
+    } else if (token.fdv >= 100000 && token.fdv < 250000) {
       gemBonus += 20;
-      signals.push(`🎯 Low cap: $${(token.fdv / 1000).toFixed(0)}K - 50x potential`);
-    } else if (token.fdv < 100000) {
+      signals.push(`🎯 Growth cap: $${(token.fdv / 1000).toFixed(0)}K`);
+    } else if (token.fdv >= 10000 && token.fdv < 25000) {
       gemBonus += 10;
+      riskPenalty += 10; // Lower mcap = higher risk
+    } else if (token.fdv < 10000) {
+      riskPenalty += 25; // Very low mcap = very risky
+      signals.push(`⚠️ MICRO CAP: $${(token.fdv / 1000).toFixed(1)}K - high risk`);
     }
 
-    // STRONG BUY PRESSURE BONUS
-    if (buyRatio > 0.80) {
-      momentum += 35;
-      signals.push(`🐋 WHALE BUYING: ${(buyRatio * 100).toFixed(0)}% buys - massive conviction`);
-    } else if (buyRatio > 0.70) {
-      momentum += 25;
-      signals.push(`💪 Strong buying: ${(buyRatio * 100).toFixed(0)}% buy ratio`);
-    } else if (buyRatio > 0.60) {
-      momentum += 15;
-    } else if (buyRatio < 0.45) {
-      momentum -= 20;
-      signals.push(`⚠️ Sell pressure: ${(buyRatio * 100).toFixed(0)}% buys`);
-    }
-
-    // VOLUME EXPLOSION BONUS
-    if (volumeToMcap > 5) {
+    // STRONG BUY PRESSURE BONUS - Stricter thresholds
+    if (buyRatio >= 0.80) {
+      momentum += 40;
+      signals.push(`🐋 MASSIVE BUYING: ${(buyRatio * 100).toFixed(0)}% buys`);
+    } else if (buyRatio >= 0.75) {
       momentum += 30;
-      signals.push(`💥 EXPLOSIVE VOLUME: ${(volumeToMcap * 100).toFixed(0)}% vol/mcap`);
-    } else if (volumeToMcap > 2) {
-      momentum += 20;
-      signals.push(`🔥 High volume: ${(volumeToMcap * 100).toFixed(0)}% vol/mcap`);
-    } else if (volumeToMcap > 0.5) {
-      momentum += 10;
-    }
-
-    // EARLY MOMENTUM
-    if (token.priceChange1h > 50 && ageHours < 2) {
-      momentum += 20;
-      signals.push(`🚀 LAUNCH PUMP: +${token.priceChange1h.toFixed(0)}%`);
-    } else if (token.priceChange1h > 20 && ageHours < 3) {
+      signals.push(`💪 Strong demand: ${(buyRatio * 100).toFixed(0)}% buy ratio`);
+    } else if (buyRatio >= 0.65) {
       momentum += 15;
-      signals.push(`📈 Strong start: +${token.priceChange1h.toFixed(0)}%`);
-    } else if (token.priceChange1h > 0) {
-      momentum += 10;
-    } else if (token.priceChange1h < -20) {
-      momentum -= 15;
-      signals.push(`⛔ Launch dump: ${token.priceChange1h.toFixed(0)}%`);
+    } else if (buyRatio < 0.55) {
+      riskPenalty += 25;
+      signals.push(`⚠️ Weak demand: ${(buyRatio * 100).toFixed(0)}% buys - risky`);
     }
 
-    // VIRAL ACTIVITY BONUS
+    // VOLUME QUALITY BONUS
     const totalTxns = token.buys24h + token.sells24h;
-    if (totalTxns > 200 && ageHours < 2) {
-      momentum += 20;
-      signals.push(`🔥 VIRAL: ${totalTxns} txns in ${ageHours.toFixed(1)}h`);
-    } else if (totalTxns > 100 && ageHours < 3) {
-      momentum += 10;
+    if (volumeToMcap >= 2.0 && totalTxns >= 200) {
+      momentum += 25;
+      signals.push(`💥 HIGH VOLUME: ${(volumeToMcap * 100).toFixed(0)}% vol/mcap + ${totalTxns} txns`);
+    } else if (volumeToMcap >= 1.0 && totalTxns >= 100) {
+      momentum += 15;
+      signals.push(`📊 Active: ${(volumeToMcap * 100).toFixed(0)}% vol/mcap`);
+    } else if (volumeToMcap < 0.3) {
+      riskPenalty += 10;
     }
 
-    // MOMENTUM ACCELERATION BONUS
-    // Fresh token pumping hard = parabolic potential
-    if (ageHours < 0.5 && token.priceChange1h > 100 && buyRatio > 0.60) {
-      gemBonus += 30;
-      signals.push(`🚀 PARABOLIC: +${token.priceChange1h.toFixed(0)}% in ${(ageHours * 60).toFixed(0)} min!`);
-    } else if (ageHours < 1 && token.priceChange1h > 50 && buyRatio > 0.55) {
-      gemBonus += 20;
-      signals.push(`📈 ACCELERATING: +${token.priceChange1h.toFixed(0)}% momentum`);
+    // MOMENTUM - Not overextended
+    if (token.priceChange1h >= 20 && token.priceChange1h < 100) {
+      momentum += 20;
+      signals.push(`📈 TRENDING: +${token.priceChange1h.toFixed(0)}% with room to run`);
+    } else if (token.priceChange1h >= 5 && token.priceChange1h < 20) {
+      momentum += 15;
+    } else if (token.priceChange1h >= 100) {
+      riskPenalty += 15;
+      signals.push(`⚠️ OVEREXTENDED: +${token.priceChange1h.toFixed(0)}% - late entry risk`);
+    } else if (token.priceChange1h < -10) {
+      riskPenalty += 20;
+      signals.push(`⛔ DUMPING: ${token.priceChange1h.toFixed(0)}%`);
     }
 
     // SOCIAL VALIDATION BOOST
-    if (socialBoost > 0) {
+    if (socialBoost >= 25) {
       gemBonus += socialBoost;
-      if (socialSignal?.spikeDetected) {
-        signals.push(`🐦 VIRAL ON X: ${socialSignal.mentionCount} mentions, trending!`);
-      } else if (socialBoost >= 20) {
-        signals.push(`🐦 X Validated: ${socialSignal?.mentionCount || 0} mentions`);
-      }
+      signals.push(`🐦 VIRAL: ${socialSignal?.mentionCount || 0} mentions on X!`);
+    } else if (socialBoost >= 15) {
+      gemBonus += socialBoost;
+      signals.push(`🐦 Validated: ${socialSignal?.mentionCount || 0} mentions`);
     }
 
-    // PRIME GEM SIGNAL
-    if (gemBonus >= 50 && momentum >= 30 && buyRatio > 0.60 && token.fdv < 50000 && ageHours < 2) {
-      signals.unshift(`🚨 PRIME GEM: Ultra-early, ultra-low mcap, strong buying - 100x POTENTIAL`);
+    // HIGH WIN-RATE SIGNALS - Only show for quality setups
+    const qualityScore = gemBonus + momentum - riskPenalty;
+    
+    if (qualityScore >= 80 && buyRatio >= 0.75 && token.liquidity >= 50000) {
+      signals.unshift(`🎯 HIGH CONFIDENCE: Strong metrics across the board`);
+    }
+    
+    if (qualityScore >= 70 && buyRatio >= 0.70 && totalTxns >= 150 && socialBoost >= 15) {
+      signals.unshift(`✅ VALIDATED GEM: Good liquidity, demand, and social proof`);
     }
 
-    // MOONSHOT SIGNAL - The ultimate 100x indicator (now includes social validation)
-    const hasSocialViral = socialSignal?.spikeDetected || (socialSignal?.mentionCount || 0) > 15;
-    if (ageHours < 0.5 && token.fdv < 30000 && buyRatio > 0.70 && token.priceChange1h > 50 && totalTxns > 50) {
-      if (hasSocialViral) {
-        signals.unshift(`🌙🐦 MOONSHOT + VIRAL: All indicators aligned + social validation!`);
-      } else {
-        signals.unshift(`🌙 MOONSHOT ALERT: All 100x indicators aligned!`);
-      }
-    }
-
-    // Standard scoring
-    const liquidity = Math.min(100, Math.max(0, 
-      (token.liquidity >= 10000 ? 40 : token.liquidity >= 5000 ? 30 : 20) +
-      (token.fdv > 0 && (token.liquidity / token.fdv) >= 0.1 ? 30 : 15) +
-      (volumeToMcap >= 0.5 ? 30 : 15)
+    // Standard scoring with risk penalty
+    const liquidityScore = Math.min(100, Math.max(0, 
+      (token.liquidity >= 100000 ? 50 : token.liquidity >= 50000 ? 40 : token.liquidity >= 25000 ? 30 : 15) +
+      (token.fdv > 0 && (token.liquidity / token.fdv) >= 0.15 ? 30 : 10) +
+      (volumeToMcap >= 1.0 ? 20 : 10)
     ));
 
-    let risk = 50;
-    if (token.liquidity >= 5000) risk += 15;
-    if (buyRatio >= 0.5) risk += 15;
-    if (ageHours < 1) risk -= 10; // Very new = higher risk but higher reward
-    // Social validation increases confidence
+    // Risk score - higher = SAFER (inverted from penalty)
+    let risk = 40;
+    if (token.liquidity >= 50000) risk += 20;
+    if (token.liquidity >= 100000) risk += 10;
+    if (buyRatio >= 0.70) risk += 15;
+    if (totalTxns >= 100) risk += 10;
+    if (ageHours >= 1 && ageHours <= 12) risk += 10; // Survived initial volatility
     if (socialBoost >= 15) risk += 10;
+    risk -= riskPenalty * 0.5; // Apply risk penalties
 
     const passedCount = conditions.filter(c => c.passed).length;
-    let confidence = Math.min(100, (passedCount / conditions.length) * 50 + 30);
-    // Social validation boosts confidence
+    let confidence = Math.min(100, (passedCount / conditions.length) * 60 + 20);
     if (socialBoost >= 20) confidence += 10;
+    if (token.liquidity >= 50000) confidence += 10;
 
-    // Clamp scores (include social boost in momentum)
-    momentum = Math.max(0, Math.min(100, momentum + gemBonus + socialBoost));
+    // Clamp scores
+    momentum = Math.max(0, Math.min(100, momentum + gemBonus - riskPenalty));
     risk = Math.max(0, Math.min(100, risk));
     confidence = Math.min(100, confidence);
 
-    // Composite heavily weighted toward momentum for GEM hunting
+    // Composite - BALANCED for win rate (risk matters more)
     const composite = Math.round(
-      momentum * 0.55 +  // Momentum is king for gems
-      gemBonus * 0.10 +  // Extra gem bonus
-      socialBoost * 0.05 + // Social validation bonus
-      liquidity * 0.10 +
-      risk * 0.10 +
-      confidence * 0.10
+      momentum * 0.35 +     // Momentum matters but not everything
+      liquidityScore * 0.20 + // Liquidity is safety
+      risk * 0.25 +          // Risk score weighs heavily
+      confidence * 0.20      // Confidence from conditions
     );
 
     return {
-      scores: { momentum, liquidity, risk, confidence, composite },
+      scores: { momentum, liquidity: liquidityScore, risk, confidence, composite },
       signals,
     };
   }

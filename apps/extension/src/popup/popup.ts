@@ -1,6 +1,6 @@
 /**
  * ClawFi Extension - Liquid Glass Popup
- * v0.5.0 - Professional Icons, ClawF Agent Integration
+ * v0.5.1 - Professional Icons, ClawF Agent Integration
  */
 
 import { getWatchlist, getAlerts, getRecentTokens, type WatchlistToken, type StoredPriceAlert, type RecentToken } from '../services/storage';
@@ -103,9 +103,11 @@ const styles = `
   
   @import url('https://fonts.googleapis.com/css2?family=Doto:wght@100;200;300;400;500;600;700;800;900&display=swap');
   
-  body {
+  html, body {
     width: 400px;
     height: 580px;
+    max-width: 400px;
+    max-height: 580px;
     overflow: hidden;
     font-family: 'Doto', monospace;
     background: linear-gradient(145deg, #0a0a12 0%, #12121a 50%, #0d0d15 100%);
@@ -126,12 +128,16 @@ const styles = `
   .popup {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 580px;
+    max-height: 580px;
+    width: 400px;
     position: relative;
     z-index: 1;
+    overflow: hidden;
   }
   
   .header {
+    flex-shrink: 0;
     padding: 20px;
     background: linear-gradient(180deg, rgba(10, 132, 255, 0.2) 0%, transparent 100%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -235,6 +241,7 @@ const styles = `
   }
   
   .tabs {
+    flex-shrink: 0;
     display: flex;
     padding: 10px 12px;
     gap: 4px;
@@ -292,8 +299,10 @@ const styles = `
   }
   
   .content {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px;
   }
   
@@ -649,6 +658,7 @@ const styles = `
   }
   
   .footer {
+    flex-shrink: 0;
     padding: 12px 16px;
     background: rgba(0, 0, 0, 0.3);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -850,7 +860,7 @@ function render(): void {
         <div class="header-top">
           <div class="brand">
             <div class="logo">
-              ${logoUrl ? `<img src="${logoUrl}" alt="ClawFi" style="width:44px;height:44px;border-radius:12px;">` : icons.logo}
+              ${logoUrl ? `<img src="${logoUrl}" alt="ClawFi" style="width:44px;height:44px;border-radius:12px;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;">${icons.logo}</div>` : icons.logo}
             </div>
             <div class="brand-text">
               <h1>ClawFi</h1>
@@ -869,7 +879,7 @@ function render(): void {
           </div>
           <div class="status-item">
             <span style="width:14px;height:14px;display:inline-flex;">${icons.logo}</span>
-            <span>v0.5.0</span>
+            <span>v0.5.1</span>
           </div>
         </div>
       </div>
@@ -903,7 +913,7 @@ function render(): void {
       </div>
       
       <div class="footer">
-        <span class="footer-version">ClawFi v0.5.0</span>
+        <span class="footer-version">ClawFi v0.5.1</span>
         <button class="btn-dashboard" id="dashboard-btn">
           ${icons.externalLink}
           Open Dashboard
@@ -1233,7 +1243,7 @@ function attachListeners(): void {
 // ============================================
 
 function init(): void {
-  console.log('[ClawFi Popup] Initializing v0.5.0...');
+  console.log('[ClawFi Popup] Initializing v0.5.1...');
   
   // Add styles
   const styleEl = document.createElement('style');
